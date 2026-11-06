@@ -1,0 +1,1467 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,maximum-scale=1">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Hog Creek">
+<meta name="theme-color" content="#141a12">
+<title>Hog Creek Lease</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Saira+Condensed:wght@600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* ============================================================
+   CLUB SETUP: paste your Google Apps Script web app URL below.
+   Each member signs in once with their personal code from the Members tab.
+   ============================================================ */
+</style>
+<script>
+window.CLUB = {
+  SHEET_URL: "https://script.google.com/macros/s/AKfycbwbEYNgZXEvyzKIKFUoWOTPLIQOMK7Ra7Xy_rGd-6SUHWCQL8ULh2woaQn9ihc9VRM-6w/exec",          // e.g. "https://script.google.com/macros/s/AKfy.../exec"
+  NAME: "Hog Creek Lease",
+  LAT: 33.1124, LON: -83.5185,
+  TZ: "America/New_York"
+};
+</script>
+<style>
+/* Field app: one dark look for dawn/dusk use. Map full screen, chips on top, bottom sheet for Today / Pins / Layers. */
+:root{
+  --bg:#141a12; --panel:#1c2419; --panel2:#232d1f; --fg:#eef1e6; --muted:#a3ad97; --line:#34402e;
+  --accent:#ff7a3d; --good:#5fd38a; --ok:#e9c84a; --bad:#ef6a5a; --stand:#1f8a4c; --camp:#8d63c9;
+  --display:"Saira Condensed","Arial Narrow",sans-serif; --body:"IBM Plex Sans",system-ui,sans-serif; --mono:"IBM Plex Mono",ui-monospace,monospace;
+  color-scheme:dark;
+}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+html,body{height:100%;margin:0;background:var(--bg);color:var(--fg);font:15px/1.45 var(--body);-webkit-tap-highlight-color:transparent}
+button{font:inherit;color:inherit}
+#map{position:fixed;inset:0;background:#0d110c}
+.leaflet-container{font:inherit;background:#0d110c}
+.leaflet-control-attribution{font-size:10px;background:rgba(0,0,0,.45)!important;color:#ccc!important}
+.leaflet-control-attribution a{color:#ddd!important}
+
+/* top chips */
+.top{position:fixed;z-index:1000;top:calc(env(safe-area-inset-top,0px) + 10px);left:max(10px,env(safe-area-inset-left,0px));right:max(10px,env(safe-area-inset-right,0px));display:flex;gap:6px;flex-wrap:wrap;pointer-events:none}
+.chip{pointer-events:auto;display:flex;align-items:center;gap:8px;background:rgba(20,26,18,.88);backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);border:1px solid var(--line);border-radius:12px;padding:6px 9px;font:500 12px var(--mono);color:var(--fg)}
+.chip b{font:700 17px var(--display);letter-spacing:.02em}
+.chip .arr{width:22px;height:22px;display:grid;place-items:center}
+.chip.title{font:700 18px var(--display);letter-spacing:.03em}
+@media (max-width:620px){.chip.title{display:none}}
+@media (max-width:440px){#moonChip{display:none}}
+.chip.gps{cursor:pointer}
+.dot{width:9px;height:9px;border-radius:50%;background:var(--muted)}
+.dot.on{background:#4aa3ff;box-shadow:0 0 0 3px rgba(74,163,255,.3)}
+
+/* side buttons */
+.fabs{position:fixed;z-index:1000;right:max(12px,env(safe-area-inset-right,0px));display:grid;gap:10px;bottom:calc(var(--sheet-h) + 14px + env(safe-area-inset-bottom,0px));transition:bottom .2s}
+.fab{width:50px;height:50px;border-radius:50%;border:1px solid var(--line);background:rgba(20,26,18,.92);display:grid;place-items:center;cursor:pointer;box-shadow:0 4px 14px rgba(0,0,0,.4)}
+.fab.add{background:var(--accent);border-color:var(--accent);color:#1a0d05}
+.fab.on{background:#1d4f86;border-color:#4aa3ff}
+.fab svg{width:24px;height:24px}
+.cross{position:fixed;z-index:999;left:50%;top:calc(50% - var(--sheet-h)/2);width:34px;height:34px;margin:-17px 0 0 -17px;pointer-events:none;display:none}
+.cross.show{display:block}
+
+/* bottom sheet */
+:root{--sheet-h:44vh}
+body.min{--sheet-h:58px}
+.sheet{position:fixed;z-index:1001;left:0;right:0;bottom:0;height:calc(var(--sheet-h) + env(safe-area-inset-bottom,0px));background:var(--panel);border-top:1px solid var(--line);border-radius:16px 16px 0 0;display:flex;flex-direction:column;transition:height .2s;box-shadow:0 -6px 24px rgba(0,0,0,.45)}
+.handle{flex:none;display:flex;align-items:center;gap:6px;padding:8px max(12px,env(safe-area-inset-left,0px)) 6px;}
+.tabs{display:flex;gap:4px;flex:1;min-width:0;overflow-x:auto}
+.tabs button{flex:none;border:0;background:transparent;color:var(--muted);font:700 17px var(--display);letter-spacing:.03em;padding:6px 10px;border-radius:8px;cursor:pointer}
+.tabs button[aria-selected="true"]{color:var(--fg);background:var(--panel2)}
+.grip{border:0;background:var(--panel2);border-radius:8px;width:40px;height:34px;display:grid;place-items:center;cursor:pointer;color:var(--muted)}
+.body{flex:1;overflow-y:auto;padding:4px max(14px,env(safe-area-inset-left,0px)) calc(16px + env(safe-area-inset-bottom,0px)) max(14px,env(safe-area-inset-right,0px));-webkit-overflow-scrolling:touch}
+.pane{display:none}.pane.on{display:grid;gap:12px}
+.days{display:flex;gap:6px;overflow-x:auto;padding-bottom:2px}
+.days button{flex:none;border:1px solid var(--line);background:var(--panel2);border-radius:10px;padding:6px 10px;min-width:58px;cursor:pointer;display:grid;gap:1px;text-align:center}
+.days button[aria-pressed="true"]{border-color:var(--accent);background:#3a2417}
+.days .d{font:700 15px var(--display)} .days .s{font:500 11px var(--mono);color:var(--muted)}
+.facts{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:8px}
+.fact{background:var(--panel2);border-radius:10px;padding:8px 10px;display:grid;gap:2px}
+.fact .k{font:500 11px var(--mono);color:var(--muted);text-transform:uppercase;letter-spacing:.05em}
+.fact .v{font:600 14px var(--body)}
+.pick{display:grid;grid-template-columns:44px 1fr auto;gap:10px;align-items:center;background:var(--panel2);border:1px solid var(--line);border-radius:12px;padding:10px;cursor:pointer}
+.pick.best{border-color:var(--good)}
+.badge{width:40px;height:40px;border-radius:50%;background:var(--stand);display:grid;place-items:center;font:700 17px var(--display);color:#fff;border:2px solid #fff}
+.pick h3{margin:0;font:700 18px/1.1 var(--display);letter-spacing:.02em}
+.pick .w{font:12.5px var(--mono);color:var(--muted)}
+.pick .why{font-size:13px;margin-top:3px}
+.score{font:700 24px var(--display);text-align:right;min-width:44px}
+.score small{display:block;font:500 10px var(--mono);color:var(--muted)}
+.g{color:var(--good)} .o{color:var(--ok)} .b{color:var(--bad)}
+.sec{font:700 13px var(--mono);color:var(--muted);text-transform:uppercase;letter-spacing:.06em;margin-top:4px}
+.note{font-size:12.5px;color:var(--muted)}
+.hours{display:grid;grid-template-columns:repeat(var(--n),1fr);gap:2px;align-items:end;height:46px}
+.hours i{display:block;border-radius:2px 2px 0 0;background:var(--line);min-height:2px}
+.hrlab{display:flex;justify-content:space-between;font:10.5px var(--mono);color:var(--muted)}
+
+/* pins */
+.plist{display:grid;gap:6px}
+.prow{display:grid;grid-template-columns:30px 1fr auto;gap:10px;align-items:center;padding:8px 10px;background:var(--panel2);border-radius:10px;cursor:pointer}
+.prow .t{font-weight:600}.prow .m{font:12px var(--mono);color:var(--muted)}
+.picon{width:26px;height:26px;border-radius:50%;display:grid;place-items:center;font:700 12px var(--display);color:#fff;border:2px solid #fff}
+.filters{display:flex;gap:6px;flex-wrap:wrap}
+.filters button,.types button{border:1px solid var(--line);background:var(--panel2);border-radius:999px;padding:5px 10px;font:600 13px var(--body);cursor:pointer;display:flex;gap:6px;align-items:center}
+.filters button[aria-pressed="true"],.types button[aria-pressed="true"]{border-color:var(--fg);background:#34402e}
+.filters i,.types i{width:10px;height:10px;border-radius:50%;display:inline-block}
+.btn{border:0;border-radius:10px;padding:11px 14px;font:600 15px var(--body);cursor:pointer;background:var(--panel2);border:1px solid var(--line)}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:#1a0d05}
+.btn.danger{color:var(--bad)}
+.row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+input,textarea,select{width:100%;background:#10150e;color:var(--fg);border:1px solid var(--line);border-radius:10px;padding:10px;font:15px var(--body)}
+label.f{display:grid;gap:4px;font:500 12px var(--mono);color:var(--muted);text-transform:uppercase;letter-spacing:.05em}
+.status{font:12px var(--mono);color:var(--muted)}
+.layers{display:grid;gap:8px}
+.layers label{display:flex;gap:10px;align-items:center;padding:8px 10px;background:var(--panel2);border-radius:10px;cursor:pointer}
+.layers input{width:auto}
+
+/* modal */
+.modal{position:fixed;inset:0;z-index:2000;background:rgba(0,0,0,.55);display:flex;align-items:flex-end;justify-content:center}
+.modal[hidden]{display:none}
+.card{width:100%;max-width:560px;background:var(--panel);border-radius:16px 16px 0 0;padding:16px max(16px,env(safe-area-inset-left,0px)) calc(18px + env(safe-area-inset-bottom,0px));display:grid;gap:12px;max-height:88vh;overflow-y:auto}
+.card h2{margin:0;font:700 24px var(--display)}
+.types{display:flex;gap:6px;flex-wrap:wrap}
+.legend{position:fixed;z-index:1000;left:max(10px,env(safe-area-inset-left,0px));bottom:calc(var(--sheet-h) + 14px + env(safe-area-inset-bottom,0px));background:rgba(20,26,18,.9);border:1px solid var(--line);border-radius:10px;padding:7px 9px;display:grid;gap:5px;font:500 11.5px var(--mono);transition:bottom .2s}
+.legend .bar{display:flex;align-items:center;gap:6px}.legend .bar span{display:flex}.legend .bar i{width:16px;height:9px;display:block}
+.navbar,.toolbar{position:fixed;z-index:1002;left:max(10px,env(safe-area-inset-left,0px));right:max(10px,env(safe-area-inset-right,0px));top:calc(env(safe-area-inset-top,0px) + 100px);display:flex;align-items:center;gap:10px;background:rgba(20,26,18,.95);border:1px solid #4aa3ff;border-radius:14px;padding:9px 10px;box-shadow:0 6px 18px rgba(0,0,0,.45)}
+.toolbar{border-color:var(--line)}
+.toolbar.blood{border-color:#c0392b}
+.navarrow{width:44px;height:44px;border-radius:50%;background:#1d4f86;display:grid;place-items:center;flex:none;transition:transform .3s}
+.navt{font:700 19px var(--display);letter-spacing:.02em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.navs{font:12.5px var(--mono);color:var(--muted)}
+.navbar .btn,.toolbar .btn{padding:8px 11px;font-size:14px}
+.thumb{width:100%;max-height:220px;object-fit:cover;border-radius:10px;margin-top:6px}
+.chk{width:26px;height:26px;border-radius:7px;border:2px solid var(--muted);display:grid;place-items:center;flex:none;background:transparent;cursor:pointer}
+.chk.on{background:var(--good);border-color:var(--good);color:#0d1a10}
+.mini{display:flex;gap:6px;flex-wrap:wrap;margin-top:4px}
+.mini .btn{padding:5px 9px;font-size:12.5px}
+.task-ic{width:24px;height:24px;border-radius:6px;background:#c9a227;border:2px solid #fff;color:#1b1503;display:grid;place-items:center;font:700 12px var(--display)}
+.harv-ic{width:24px;height:24px;border-radius:50%;background:#e2a51b;border:2px solid #fff;color:#1b1203;display:grid;place-items:center;font:700 11px var(--display)}
+.sharebox{display:flex;gap:12px;align-items:flex-start;padding:10px 12px;background:var(--panel2);border:1px solid var(--line);border-radius:12px;cursor:pointer}
+.sharebox input{width:22px;height:22px;margin-top:2px;accent-color:#2bb5a0;flex:none}
+.mate{display:flex;align-items:center;gap:4px;white-space:nowrap;transform:translate(-9px,-9px)}
+.mate b{width:18px;height:18px;border-radius:50%;background:#2bb5a0;border:3px solid #fff;flex:none;box-shadow:0 0 0 5px rgba(43,181,160,.25)}
+.mate span{background:rgba(20,26,18,.9);border:1px solid #2bb5a0;color:#fff;font:700 13px var(--display);letter-spacing:.03em;padding:1px 6px;border-radius:6px}
+.mate.old b{background:#7c8f86;box-shadow:none}.mate.old span{border-color:#7c8f86;color:#cfd6d2}
+.nb-lbl{transform:translate(-50%,-50%);white-space:nowrap;width:max-content;font:700 12px var(--display);letter-spacing:.04em;text-transform:uppercase;color:#fff;background:rgba(120,25,20,.75);border:1px solid #ff5a4f;padding:1px 6px;border-radius:5px}
+.toast{position:fixed;z-index:3000;left:50%;transform:translateX(-50%);bottom:calc(var(--sheet-h) + 80px + env(safe-area-inset-bottom,0px));max-width:calc(100% - 32px);text-align:center;background:#26331f;border:1px solid var(--line);padding:9px 14px;border-radius:10px;font-weight:600;display:none}
+.toast.show{display:block}
+
+/* map labels */
+.lbl{background:none;border:0}
+.stand-ic{width:34px;height:34px;border-radius:50%;background:var(--stand);border:3px solid #fff;color:#fff;display:grid;place-items:center;font:700 15px var(--display);box-shadow:0 2px 6px rgba(0,0,0,.5)}
+.stand-ic.top{background:#e2a51b;color:#1b1203}
+.stand-ic.busy{box-shadow:0 0 0 4px #ff7a3d,0 2px 6px rgba(0,0,0,.5)}
+.hunter{display:flex;align-items:center;gap:4px;white-space:nowrap;transform:translate(-50%,-50%)}
+.hunter b{width:16px;height:16px;border-radius:50%;background:#ff7a3d;border:3px solid #fff;flex:none}
+.hunter span{background:rgba(20,26,18,.9);border:1px solid #ff7a3d;color:#fff;font:700 13px var(--display);letter-spacing:.03em;padding:1px 6px;border-radius:6px}
+#outDot.on{background:#ff7a3d;box-shadow:0 0 0 3px rgba(255,122,61,.3)}
+.old-ic{width:20px;height:20px;border-radius:50%;background:#e2591b;border:2px solid #fff;color:#fff;display:grid;place-items:center;font:600 10px var(--mono)}
+.camp-ic{width:30px;height:30px;border-radius:7px;background:var(--camp);border:3px solid #fff;color:#fff;display:grid;place-items:center;font:700 15px var(--display)}
+.mewrap{position:relative;width:90px;height:90px}
+.mewrap .cone{position:absolute;inset:0;transition:transform .25s linear;display:none}
+.mewrap.hd .cone{display:block}
+.me{position:absolute;left:36px;top:36px;width:18px;height:18px;border-radius:50%;background:#4aa3ff;border:3px solid #fff;box-shadow:0 0 0 6px rgba(74,163,255,.25)}
+.leaflet-popup-content-wrapper,.leaflet-popup-tip{background:var(--panel);color:var(--fg);border:1px solid var(--line)}
+.leaflet-popup-content{margin:10px 12px;font:14px/1.4 var(--body)}
+.leaflet-popup-content h4{margin:0 0 2px;font:700 17px var(--display)}
+.pop-m{font:12px var(--mono);color:var(--muted)}
+</style>
+</head>
+<body>
+<div id="map"></div>
+
+<div class="top">
+  <div class="chip title" id="ttl">Hog Creek</div>
+  <div class="chip" id="windChip" title="Wind now"><span class="arr" id="windArr"></span><span><b id="windTxt">--</b> <span id="windSp"></span></span></div>
+  <div class="chip" id="lightChip" title="Legal shooting light"><span id="lightTxt">--</span></div>
+  <div class="chip" id="moonChip" title="Moon"><span id="moonIc"></span><span id="moonTxt">--</span></div>
+  <div class="chip gps" id="outChip" title="Who's hunting"><span class="dot" id="outDot"></span><span id="outTxt">Nobody out</span></div>
+  <div class="chip gps" id="gpsChip"><span class="dot" id="gpsDot"></span><span id="gpsTxt">GPS off</span></div>
+</div>
+
+<svg class="cross" id="cross" viewBox="0 0 34 34"><circle cx="17" cy="17" r="9" fill="none" stroke="#fff" stroke-width="2.5"/><circle cx="17" cy="17" r="9" fill="none" stroke="#000" stroke-width="1" stroke-opacity=".6"/><path d="M17 0v10M17 24v10M0 17h10M24 17h10" stroke="#fff" stroke-width="2.5"/></svg>
+
+<div class="fabs">
+  <button class="fab" id="btnLocate" aria-label="Show my location"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="4"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/></svg></button>
+  <button class="fab add" id="btnAdd" aria-label="Add a pin"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6"><path d="M12 5v14M5 12h14"/></svg></button>
+</div>
+
+<div class="sheet" id="sheet">
+  <div class="handle">
+    <div class="tabs" role="tablist">
+      <button role="tab" aria-selected="true" data-p="today">Hunt plan</button>
+      <button role="tab" aria-selected="false" data-p="out">Who's out</button>
+      <button role="tab" aria-selected="false" data-p="log">Log</button>
+      <button role="tab" aria-selected="false" data-p="work">Work</button>
+      <button role="tab" aria-selected="false" data-p="pins">Pins</button>
+      <button role="tab" aria-selected="false" data-p="layers">Map</button>
+      <button role="tab" aria-selected="false" data-p="settings">Settings</button>
+    </div>
+    <button class="grip" id="grip" aria-label="Collapse panel"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path id="gripPath" d="M6 9l6 6 6-6"/></svg></button>
+  </div>
+  <div class="body">
+    <section class="pane on" id="p-today">
+      <div class="days" id="days"></div>
+      <div class="facts" id="facts"></div>
+      <div class="sec">Best stands</div>
+      <div id="picks" style="display:grid;gap:8px"></div>
+      <div class="note" id="planNote"></div>
+    </section>
+
+    <section class="pane" id="p-out">
+      <label class="sharebox"><input type="checkbox" id="shareToggle"><span><b>Share my location with the club</b><br><span class="note" id="shareTxt">Off. Only you see your dot.</span></span></label>
+      <div class="plist" id="sharers"></div>
+      <div id="myCheck"></div>
+      <div class="sec">In the woods now</div>
+      <div class="plist" id="outList"></div>
+      <p class="note">Check in when you get to your stand so everyone arriving at camp knows where you are. It clears itself after 8 hours, or when you check out.</p>
+      <div class="sec">Reservations</div>
+      <div class="days" id="resDays"></div>
+      <button class="btn primary" id="btnReserve">Reserve a stand</button>
+      <div class="note" id="resRules"></div>
+      <div class="plist" id="resList"></div>
+    </section>
+
+    <section class="pane" id="p-log">
+      <div class="row"><button class="btn primary" id="btnLogSit">Log a sit</button><button class="btn" id="btnAddHarvest">Add a harvest</button></div>
+      <div class="sec">Stands by the numbers</div>
+      <div class="plist" id="standStats"></div>
+      <div class="sec">Harvests this season</div>
+      <div class="facts" id="harvTotals"></div>
+      <div class="plist" id="harvList"></div>
+      <div class="sec">Recent sits</div>
+      <div class="plist" id="sitList"></div>
+    </section>
+
+    <section class="pane" id="p-work">
+      <button class="btn primary" id="btnAddTask">Add a job</button>
+      <div class="sec">To do</div>
+      <div class="plist" id="taskOpen"></div>
+      <div class="sec">Done (last 60 days)</div>
+      <div class="plist" id="taskDone"></div>
+    </section>
+
+    <section class="pane" id="p-pins">
+      <div class="filters" id="filters"></div>
+      <div class="plist" id="plist"></div>
+      <div class="status" id="syncStatus"></div>
+    </section>
+
+    <section class="pane" id="p-layers">
+      <div class="sec">Base map</div>
+      <div class="layers" id="baseLayers"></div>
+      <div class="sec">Overlays</div>
+      <div class="layers" id="overLayers"></div>
+      <div class="sec">Tools</div>
+      <div class="row"><button class="btn" id="btnMeasure">Measure distance / area</button><button class="btn" id="btnBlood">Start a blood trail</button></div>
+      <div class="row"><button class="btn" id="btnFit">Zoom to property</button><button class="btn" id="btnClearTrack">Clear my track</button></div>
+    </section>
+
+    <section class="pane" id="p-settings">
+      <div class="fact"><span class="k">Signed in as</span><span class="v" id="whoami">Not signed in</span></div>
+      <div class="row"><button class="btn" id="btnSignOut">Sign out of this phone</button></div>
+      <label class="f">Club sheet link<input id="setUrl" placeholder="Apps Script /exec link (only if not built in)"></label>
+      <div class="row">
+        <label class="f" style="flex:1">Rut starts<input id="setRutA" type="date"></label>
+        <label class="f" style="flex:1">Rut ends<input id="setRutB" type="date"></label>
+      </div>
+      <button class="btn primary" id="btnSave">Save settings</button>
+      <div class="sec">Offline map</div>
+      <button class="btn" id="btnOffline">Save the lease map for no-signal use</button>
+      <div class="status" id="offlineStatus"></div>
+      <p class="note">Club admins add or remove members in the Members tab of the club sheet. Removing someone's row locks that phone out on its next sync.</p>
+      <p class="note">On iPhone: tap Share, then <b>Add to Home Screen</b> to use this like an app. Keep the screen on while walking so your track records. Tap "Save the lease map" at home on Wi-Fi and the map works on the lease with no signal. Pins and check-ins save on the phone and upload as soon as you get a bar.</p>
+      <p class="note">Weather: Open-Meteo. Moon: computed on your phone. Imagery: Esri, USGS 3DEP LiDAR.</p>
+    </section>
+  </div>
+</div>
+
+<div class="modal" id="signModal" hidden>
+  <form class="card" id="signForm">
+    <h2>Sign in</h2>
+    <p class="note" style="margin:0">Enter the personal code the club gave you. You only do this once on each phone.</p>
+    <label class="f">Your code<input id="signCode" autocomplete="one-time-code" autocapitalize="off" spellcheck="false" required></label>
+    <label class="f" id="signUrlWrap" hidden>Club sheet link<input id="signUrl" placeholder="https://script.google.com/macros/s/…/exec"></label>
+    <div class="status" id="signMsg"></div>
+    <button class="btn primary" type="submit" id="signBtn">Sign in</button>
+  </form>
+</div>
+
+<div class="modal" id="checkModal" hidden>
+  <div class="card">
+    <h2>Where are you hunting?</h2>
+    <div class="plist" id="checkList"></div>
+    <button class="btn" type="button" id="checkCancel">Cancel</button>
+  </div>
+</div>
+
+<div class="modal" id="addModal" hidden>
+  <form class="card" id="addForm">
+    <h2>New pin</h2>
+    <div class="row" id="whereRow">
+      <button type="button" class="btn" id="whereGps" aria-pressed="true">At my location</button>
+      <button type="button" class="btn" id="whereMap" aria-pressed="false">At map crosshair</button>
+    </div>
+    <div class="status" id="whereTxt"></div>
+    <div class="types" id="typeBtns"></div>
+    <label class="f">Note<textarea id="pinNote" rows="2" placeholder="Fresh scrape, licking branch, 8 pt on cam…"></textarea></label>
+    <div class="row"><button class="btn primary" type="submit" id="pinSave">Save pin</button><button class="btn" type="button" id="pinCancel">Cancel</button></div>
+  </form>
+</div>
+
+<div class="modal" id="resModal" hidden>
+  <form class="card" id="resForm">
+    <h2>Reserve a stand</h2>
+    <label class="f">Day<select id="resDate"></select></label>
+    <div class="types" id="resSlots"></div>
+    <label class="f">Stand<select id="resStand"></select></label>
+    <div class="status" id="resMsg"></div>
+    <div class="row"><button class="btn primary" type="submit">Reserve</button><button class="btn" type="button" data-close>Cancel</button></div>
+  </form>
+</div>
+
+<div class="modal" id="sitModal" hidden>
+  <form class="card" id="sitForm">
+    <h2>Log a sit</h2>
+    <label class="f">Stand<select id="sitStand"></select></label>
+    <div class="row">
+      <label class="f" style="flex:1">Date<input id="sitDate" type="date"></label>
+      <label class="f" style="flex:1">From<input id="sitStart" type="time"></label>
+      <label class="f" style="flex:1">To<input id="sitEnd" type="time"></label>
+    </div>
+    <div class="row">
+      <label class="f" style="flex:1">Does seen<input id="sitDoes" type="number" min="0" inputmode="numeric" value="0"></label>
+      <label class="f" style="flex:1">Bucks seen<input id="sitBucks" type="number" min="0" inputmode="numeric" value="0"></label>
+    </div>
+    <label class="f">Other game<input id="sitOther" placeholder="2 gobblers, hogs, wood ducks…"></label>
+    <label class="f">Notes<textarea id="sitNotes" rows="2" placeholder="Came down the drainage at 7:40…"></textarea></label>
+    <div class="status" id="sitWind"></div>
+    <div class="row"><button class="btn primary" type="submit">Save sit</button><button class="btn" type="button" data-close>Skip</button></div>
+  </form>
+</div>
+
+<div class="modal" id="harvModal" hidden>
+  <form class="card" id="harvForm">
+    <h2>Add a harvest</h2>
+    <div class="types" id="harvSpecies"></div>
+    <div class="types" id="harvSex"></div>
+    <div class="row">
+      <label class="f" style="flex:1">Points<input id="harvPts" type="number" min="0" inputmode="numeric"></label>
+      <label class="f" style="flex:1">Weight (lb)<input id="harvWt" type="number" min="0" inputmode="numeric"></label>
+      <label class="f" style="flex:1">Date<input id="harvDate" type="date"></label>
+    </div>
+    <label class="f">Stand<select id="harvStand"></select></label>
+    <label class="f">Notes<textarea id="harvNotes" rows="2" placeholder="Shot at 7:52, 60 yd, ran 40 yd…"></textarea></label>
+    <label class="f">Photo<input id="harvPhoto" type="file" accept="image/*"></label>
+    <img id="harvPrev" alt="" style="max-width:100%;border-radius:10px" hidden>
+    <div class="status" id="harvMsg"></div>
+    <div class="row"><button class="btn primary" type="submit" id="harvSave">Save harvest</button><button class="btn" type="button" data-close>Cancel</button></div>
+  </form>
+</div>
+
+<div class="modal" id="taskModal" hidden>
+  <form class="card" id="taskForm">
+    <h2>Add a job</h2>
+    <label class="f">Job<input id="taskTitle" required maxlength="80" placeholder="Cut shooting lanes at S2"></label>
+    <label class="f">Details<textarea id="taskNotes" rows="2" placeholder="Bring pole saw and loppers"></textarea></label>
+    <label class="f">Who's doing it<select id="taskWho"></select></label>
+    <div class="types" id="taskWhere"></div>
+    <div class="status" id="taskWhereTxt"></div>
+    <div class="row"><button class="btn primary" type="submit">Save job</button><button class="btn" type="button" data-close>Cancel</button></div>
+  </form>
+</div>
+
+<div class="navbar" id="navBar" hidden>
+  <div class="navarrow" id="navArrow"><svg viewBox="0 0 24 24" width="30" height="30"><path d="M12 2l7 18-7-4-7 4z" fill="#fff"/></svg></div>
+  <div style="min-width:0;flex:1"><div class="navt" id="navTitle">--</div><div class="navs" id="navSub">--</div></div>
+  <button class="btn" id="navStop">Stop</button>
+</div>
+
+<div class="toolbar" id="measureBar" hidden>
+  <div style="flex:1;min-width:0"><div class="navt" id="measTxt">Tap the map to add points</div><div class="navs" id="measSub">2 points for distance, 3 or more for area</div></div>
+  <button class="btn" id="measUndo">Undo</button><button class="btn" id="measDone">Done</button>
+</div>
+
+<div class="toolbar blood" id="bloodBar" hidden>
+  <div style="flex:1;min-width:0"><div class="navt" id="bloodTxt">Blood trail</div><div class="navs" id="bloodSub">Tap Blood each time you find sign</div></div>
+  <button class="btn primary" id="bloodMark">Blood</button><button class="btn" id="bloodBack">Last sign</button><button class="btn" id="bloodEnd">End</button>
+</div>
+
+<div class="legend" id="legend" hidden></div>
+<div class="toast" id="toast"></div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/suncalc/1.9.0/suncalc.min.js"></script>
+<script>
+let LEASE = null;
+const RR_ELEV='{"rasterFunction":"Colormap","rasterFunctionArguments":{"Colormap":[[1,44,123,182],[2,0,166,202],[3,0,204,188],[4,144,235,157],[5,255,255,140],[6,249,141,89],[7,215,25,28]],"Raster":{"rasterFunction":"Remap","rasterFunctionArguments":{"InputRanges":[0.0,120.4,120.4,124.97,124.97,129.54,129.54,134.11,134.11,138.68,138.68,143.26,143.26,3047.7],"OutputValues":[1,2,3,4,5,6,7]}}}}';
+const RR_SLOPE='{"rasterFunction":"Colormap","rasterFunctionArguments":{"Colormap":[[1,46,125,50],[2,139,195,74],[3,253,216,53],[4,245,124,0],[5,183,28,28]],"Raster":{"rasterFunction":"Remap","rasterFunctionArguments":{"InputRanges":[0,5,5,10,10,15,15,22,22,90],"OutputValues":[1,2,3,4,5],"Raster":{"rasterFunction":"Slope Degrees"}}}}}';
+const PIN_TYPES = [
+  {k:"stand",  name:"Deer stand", c:"#1f8a4c", g:"DS"},
+  {k:"scrape", name:"Scrape",     c:"#ff3b8b", g:"Sc"},
+  {k:"rub",    name:"Rub",        c:"#c2702b", g:"Rb"},
+  {k:"turkey", name:"Turkey spot",c:"#b5432f", g:"Tk"},
+  {k:"duck",   name:"Duck spot",  c:"#2f8fd0", g:"Dk"},
+  {k:"dblind", name:"Duck blind", c:"#1d5f99", g:"DB"},
+  {k:"cam",    name:"Trail cam",  c:"#6b6b6b", g:"Cm"},
+  {k:"harvest",name:"Harvest",    c:"#e2a51b", g:"H"},
+  {k:"blood",  name:"Blood",      c:"#9e1b1b", g:"Bl"},
+  {k:"note",   name:"Note",       c:"#7d8c6e", g:"N"}
+];
+const TYPE = Object.fromEntries(PIN_TYPES.map(t=>[t.k,t]));
+
+/* ---------- storage helpers ---------- */
+const S = {
+  get(k,d){try{const v=localStorage.getItem("hc_"+k);return v==null?d:JSON.parse(v)}catch(e){return d}},
+  set(k,v){try{localStorage.setItem("hc_"+k,JSON.stringify(v))}catch(e){}}
+};
+const cfg = Object.assign({code:"",url:CLUB.SHEET_URL||"",rutA:"",rutB:""}, S.get("cfg",{}));
+let ME = S.get("me",null);
+LEASE = S.get("lease",null);
+if(!cfg.url && CLUB.SHEET_URL) cfg.url=CLUB.SHEET_URL;
+const yr=new Date().getFullYear();
+if(!cfg.rutA){cfg.rutA=`${yr}-10-25`;cfg.rutB=`${yr}-11-25`}
+
+function toast(msg){const t=document.getElementById("toast");t.textContent=msg;t.classList.add("show");clearTimeout(t._h);t._h=setTimeout(()=>t.classList.remove("show"),2400)}
+const esc=s=>String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+
+/* ---------- map ---------- */
+const map=L.map("map",{zoomControl:false,attributionControl:true,maxZoom:20,zoomSnap:.25}).setView([CLUB.LAT,CLUB.LON],LEASE?16:12);
+const WMSTiles=L.TileLayer.extend({getTileUrl(c){const W=40075016.68557849,n=2**c.z,x0=-W/2+c.x*W/n,y1=W/2-c.y*W/n;return `${this._url}&BBOX=${x0},${y1-W/n},${x0+W/n},${y1}`}});
+const WMS=l=>`https://elevation.nationalmap.gov/arcgis/services/3DEPElevation/ImageServer/WMSServer?SERVICE=WMS&REQUEST=GetMap&VERSION=1.1.1&SRS=EPSG:3857&WIDTH=256&HEIGHT=256&STYLES=&FORMAT=image/png&TRANSPARENT=true&LAYERS=${encodeURIComponent(l)}`;
+const ExportTiles=L.TileLayer.extend({getTileUrl(c){const W=40075016.68557849,n=2**c.z,x0=-W/2+c.x*W/n,y1=W/2-c.y*W/n;return `${this._url}&bbox=${x0},${y1-W/n},${x0+W/n},${y1}`}});
+const IMG="https://elevation.nationalmap.gov/arcgis/rest/services/3DEPElevation/ImageServer/exportImage?bboxSR=3857&imageSR=3857&size=256,256&format=png&f=image&renderingRule=";
+const bases={
+  "Aerial":L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",{maxNativeZoom:18,maxZoom:20,attribution:"Imagery © Esri"}),
+  "Topo":L.tileLayer("https://basemap.nationalmap.gov/arcgis/rest/services/USGSTopo/MapServer/tile/{z}/{y}/{x}",{maxNativeZoom:16,maxZoom:20,attribution:"USGS"}),
+  "LiDAR terrain":null
+};
+bases["LiDAR terrain"]=new WMSTiles(WMS("3DEPElevation:Hillshade Multidirectional"),{maxZoom:20,maxNativeZoom:17,attribution:"USGS 3DEP"});
+let baseName=S.get("base","Aerial"); if(!bases[baseName]) baseName="Aerial";
+bases[baseName].addTo(map);
+
+const ov={};
+ov["Elevation (high / low)"]=new ExportTiles(IMG+encodeURIComponent(RR_ELEV),{opacity:.5,maxZoom:20,maxNativeZoom:17,zIndex:2,attribution:"USGS 3DEP"});
+ov["Slope (flat / steep)"]=new ExportTiles(IMG+encodeURIComponent(RR_SLOPE),{opacity:.5,maxZoom:20,maxNativeZoom:17,zIndex:3,attribution:"USGS 3DEP"});
+ov["10 ft contours"]=new WMSTiles(WMS("3DEPElevation:Preset 10ft Contour Interval"),{maxZoom:20,maxNativeZoom:17,opacity:.85,zIndex:4,attribution:"USGS 3DEP"});
+ov["Boundary"]=L.layerGroup();
+ov["Blowdown & scrape line"]=L.layerGroup();
+ov["Roads"]=L.layerGroup();
+ov["Camp"]=L.layerGroup();
+ov["Neighbor lines"]=L.layerGroup();
+ov["Public land (WMA)"]=L.layerGroup();
+const standLayer=L.layerGroup(); ov["Stands"]=standLayer;
+const oldLayer=L.layerGroup(); ov["Old stand pins"]=oldLayer;
+const pinLayer=L.layerGroup(); ov["Club pins"]=pinLayer;
+const coneLayer=L.layerGroup(); ov["Scent cones"]=coneLayer;
+const trackLayer=L.layerGroup(); ov["My track"]=trackLayer;
+const hunterLayer=L.layerGroup(); ov["Hunters"]=hunterLayer;
+const mateLayer=L.layerGroup(); ov["Members sharing location"]=mateLayer;
+const taskLayer=L.layerGroup(); ov["Work list"]=taskLayer;
+const harvLayer=L.layerGroup(); ov["Harvests"]=harvLayer;
+const navLayer=L.layerGroup().addTo(map), measLayer=L.layerGroup().addTo(map), bloodLayer=L.layerGroup().addTo(map);
+const defaultsOn=["Public land (WMA)","Neighbor lines","Members sharing location","Work list","Harvests","Hunters","10 ft contours","Boundary","Blowdown & scrape line","Roads","Camp","Stands","Club pins","Scent cones","My track"];
+const ovOn=S.get("ov",defaultsOn);
+Object.entries(ov).forEach(([n,l])=>{if(ovOn.includes(n)) l.addTo(map)});
+function fitLease(){if(!LEASE)return;const h=document.body.classList.contains("min")?70:Math.round(innerHeight*.44)+10;map.fitBounds(L.polygon(LEASE.boundary).getBounds(),{paddingTopLeft:[20,110],paddingBottomRight:[70,h]})}
+const standMarkers={};
+function buildLease(fit){
+  ["Boundary","Blowdown & scrape line","Roads","Camp","Neighbor lines","Public land (WMA)"].forEach(k=>ov[k].clearLayers());
+  standLayer.clearLayers(); oldLayer.clearLayers();
+  if(!LEASE) return;
+  L.polygon(LEASE.boundary,{color:"#ffd600",weight:3.5,fill:true,fillOpacity:.04}).addTo(ov["Boundary"]);
+  if(LEASE.neighbors){
+    LEASE.neighbors.lines.forEach(l=>L.polyline(l,{color:"#ff5a4f",weight:2.5,dashArray:"7 5",opacity:.9}).bindPopup("<h4>Neighbor property line</h4>Traced from onX, about ±30 m. Don't use it to settle a line.").addTo(ov["Neighbor lines"]));
+    (LEASE.neighbors.public||[]).forEach(p=>L.polygon(p.poly,{color:"#3fbf5f",weight:2,dashArray:"4 4",fillColor:"#3fbf5f",fillOpacity:.18}).bindPopup(`<h4>${esc(p.name)}</h4>Public hunting land (USFS). On WMA hunt days, pressure here can push deer onto the lease.`).addTo(ov["Public land (WMA)"]));
+    LEASE.neighbors.labels.forEach(n=>L.marker(n.ll,{icon:L.divIcon({className:"lbl",html:`<div class="nb-lbl" style="transform:translate(${n.align==="end"?"-100%":n.align==="start"?"0":"-50%"},-50%)">${esc(n.name)}</div>`,iconSize:[0,0]}),interactive:false}).addTo(ov["Neighbor lines"]));
+  }
+  if(LEASE.blowdown) L.polygon(LEASE.blowdown,{color:"#fff",weight:2,dashArray:"6 5",fillColor:"#fff",fillOpacity:.12}).bindPopup("<h4>Tornado blowdown</h4>About 13 ac of downed timber. Sanctuary: hunt the edges, don't go in.").addTo(ov["Blowdown & scrape line"]);
+  if(LEASE.scrape) L.polyline(LEASE.scrape,{color:"#ff3b8b",weight:5,dashArray:"2 9",lineCap:"round"}).bindPopup("<h4>Scrape & rub line</h4>On the rise between the pines and hardwoods.").addTo(ov["Blowdown & scrape line"]);
+  if(LEASE.mainRoad){L.polyline(LEASE.mainRoad,{color:"#000",weight:8,opacity:.45}).addTo(ov["Roads"]);L.polyline(LEASE.mainRoad,{color:"#fff",weight:4}).bindPopup("<h4>Main road</h4>Existing, good shape.").addTo(ov["Roads"])}
+  if(LEASE.newRoad){L.polyline(LEASE.newRoad,{color:"#000",weight:8,opacity:.45}).addTo(ov["Roads"]);L.polyline(LEASE.newRoad,{color:"#ffd34d",weight:4,dashArray:"10 7"}).bindPopup("<h4>SE line road</h4>Proposed reopen. Needs Weyerhaeuser forester approval first; no cutting commercial trees.").addTo(ov["Roads"])}
+  if(LEASE.camp) L.marker(LEASE.camp,{icon:L.divIcon({className:"lbl",html:'<div class="camp-ic">C</div>',iconSize:[30,30],iconAnchor:[15,15]})}).bindPopup("<h4>Camp</h4>In the pines, about 130 m off the road.").addTo(ov["Camp"]);
+  (LEASE.stands||[]).forEach(s=>{
+    const m=L.marker(s.ll,{icon:L.divIcon({className:"lbl",html:`<div class="stand-ic">${esc(s.id)}</div>`,iconSize:[34,34],iconAnchor:[17,17]}),zIndexOffset:500});
+    m.bindPopup(()=>standPopup(s)); m.addTo(standLayer); standMarkers[s.id]=m;
+  });
+  (LEASE.oldPins||[]).forEach(p=>{
+    L.marker(p.ll,{icon:L.divIcon({className:"lbl",html:`<div class="old-ic">${esc(p.n)}</div>`,iconSize:[20,20],iconAnchor:[10,10]})})
+     .bindPopup(()=>withHuntButton(`<h4>Old pin ${esc(p.n)}</h4>${esc(p.note||"Old stand / camera site")}<div class="pop-m">${p.ll[0]}, ${p.ll[1]} · ${p.ft} ft</div>`,{stand:"Old "+p.n,label:"Old stand "+p.n,ll:p.ll})).addTo(oldLayer);
+  });
+  if(fit) fitLease();
+}
+
+/* ---------- geometry ---------- */
+const R=6371000, rad=d=>d*Math.PI/180, deg=r=>r*180/Math.PI;
+function dist(a,b){const dLa=rad(b[0]-a[0]),dLo=rad(b[1]-a[1]);const h=Math.sin(dLa/2)**2+Math.cos(rad(a[0]))*Math.cos(rad(b[0]))*Math.sin(dLo/2)**2;return 2*R*Math.asin(Math.sqrt(h))}
+function bearing(a,b){const y=Math.sin(rad(b[1]-a[1]))*Math.cos(rad(b[0]));const x=Math.cos(rad(a[0]))*Math.sin(rad(b[0]))-Math.sin(rad(a[0]))*Math.cos(rad(b[0]))*Math.cos(rad(b[1]-a[1]));return (deg(Math.atan2(y,x))+360)%360}
+function dest(p,brg,m){const d=m/R,b=rad(brg),la=rad(p[0]),lo=rad(p[1]);const la2=Math.asin(Math.sin(la)*Math.cos(d)+Math.cos(la)*Math.sin(d)*Math.cos(b));const lo2=lo+Math.atan2(Math.sin(b)*Math.sin(d)*Math.cos(la),Math.cos(d)-Math.sin(la)*Math.sin(la2));return [deg(la2),deg(lo2)]}
+function inPoly(pt,poly){let c=false;for(let i=0,j=poly.length-1;i<poly.length;j=i++){const [yi,xi]=poly[i],[yj,xj]=poly[j];if(((yi>pt[0])!=(yj>pt[0]))&&(pt[1]<(xj-xi)*(pt[0]-yi)/(yj-yi)+xi))c=!c}return c}
+const CARD=["N","NNE","NE","ENE","E","ESE","SE","SSE","S","SSW","SW","WSW","W","WNW","NW","NNW"];
+const card=d=>CARD[Math.round(((d%360)+360)%360/22.5)%16];
+const yd=m=>Math.round(m*1.0936);
+
+/* ---------- weather ---------- */
+let WX=S.get("wx",null);
+async function loadWeather(){
+  const u=`https://api.open-meteo.com/v1/forecast?latitude=${CLUB.LAT}&longitude=${CLUB.LON}&hourly=temperature_2m,precipitation_probability,wind_speed_10m,wind_direction_10m,wind_gusts_10m,pressure_msl,cloud_cover&daily=sunrise,sunset&wind_speed_unit=mph&temperature_unit=fahrenheit&precipitation_unit=inch&timezone=${encodeURIComponent(CLUB.TZ)}&forecast_days=7`;
+  try{
+    const r=await fetch(u); if(!r.ok) throw new Error(r.status);
+    const j=await r.json(); j._at=Date.now(); WX=j; S.set("wx",j);
+  }catch(e){ if(!WX) toast("No weather yet (no signal?)"); }
+  renderAll();
+}
+function wxIndex(t){ // nearest hourly index for Date t
+  if(!WX) return -1; const ts=WX.hourly.time; const key=fmtLocalHour(t);
+  let i=ts.indexOf(key); return i;
+}
+function fmtLocalHour(d){ // YYYY-MM-DDTHH:00 in club TZ
+  const p=new Intl.DateTimeFormat("en-CA",{timeZone:CLUB.TZ,year:"numeric",month:"2-digit",day:"2-digit",hour:"2-digit",hourCycle:"h23"}).formatToParts(d);
+  const g=k=>p.find(x=>x.type===k).value; return `${g("year")}-${g("month")}-${g("day")}T${g("hour")}:00`;
+}
+function dayKey(d){return fmtLocalHour(d).slice(0,10)}
+const fmtT=d=>d?d.toLocaleTimeString("en-US",{timeZone:CLUB.TZ,hour:"numeric",minute:"2-digit"}):"--";
+const fmtD=d=>d.toLocaleDateString("en-US",{timeZone:CLUB.TZ,weekday:"short",month:"short",day:"numeric"});
+
+/* ---------- moon / solunar ---------- */
+function moonInfo(day){ // day: Date at local noon
+  const ill=SunCalc.getMoonIllumination(day);
+  const ph=ill.phase; const names=[[.03,"New moon"],[.22,"Waxing crescent"],[.28,"First quarter"],[.47,"Waxing gibbous"],[.53,"Full moon"],[.72,"Waning gibbous"],[.78,"Last quarter"],[.97,"Waning crescent"],[1.01,"New moon"]];
+  const name=names.find(n=>ph<n[0])[1];
+  const start=new Date(day); start.setHours(start.getHours()-12);
+  const mt=SunCalc.getMoonTimes(start,CLUB.LAT,CLUB.LON);
+  // overhead / underfoot by scanning altitude
+  let maxA=-9,minA=9,tMax=null,tMin=null;
+  for(let m=0;m<=24*60;m+=6){const t=new Date(start.getTime()+m*60000);const a=SunCalc.getMoonPosition(t,CLUB.LAT,CLUB.LON).altitude;if(a>maxA){maxA=a;tMax=t}if(a<minA){minA=a;tMin=t}}
+  const majors=[tMax,tMin].filter(Boolean).map(t=>[new Date(t-3600e3),new Date(+t+3600e3),"Major"]);
+  const minors=[mt.rise,mt.set].filter(Boolean).map(t=>[new Date(t-1800e3),new Date(+t+1800e3),"Minor"]);
+  return {ill:ill.fraction,phase:ph,name,rise:mt.rise,set:mt.set,over:tMax,under:tMin,periods:[...majors,...minors].sort((a,b)=>a[0]-b[0])};
+}
+function moonSvg(phase,size=20){ // simple phase glyph
+  const r=size/2-1, c=size/2; const k=Math.cos(phase*2*Math.PI); const right=phase<.5;
+  const sweep1=right?1:0; const rx=Math.abs(k)*r; const sweep2=(phase<.25||phase>.75)?(right?0:1):(right?1:0);
+  return `<svg width="${size}" height="${size}" viewBox="0 0 ${size} ${size}"><circle cx="${c}" cy="${c}" r="${r}" fill="#3a4433"/><path d="M${c} ${c-r} A${r} ${r} 0 0 ${sweep1} ${c} ${c+r} A${rx} ${r} 0 0 ${sweep2} ${c} ${c-r}" fill="#f1ecd2"/></svg>`;
+}
+
+/* ---------- stand scoring ---------- */
+function angDiff(a,b){let d=Math.abs(a-b)%360;return d>180?360-d:d}
+function windFit(stand,dir){
+  for(const [a,b] of stand.winds){ if(b-a>=360) return {f:.85,txt:"any wind"}; if(dir>=a&&dir<=b) return {f:1,txt:"good wind"}; }
+  let best=999; for(const [a,b] of stand.winds){best=Math.min(best,angDiff(dir,a),angDiff(dir,b))}
+  if(best<=25) return {f:.55,txt:"marginal wind"};
+  return {f:.05,txt:"wrong wind"};
+}
+function inRut(d){const k=dayKey(d);return cfg.rutA&&cfg.rutB&&k>=cfg.rutA&&k<=cfg.rutB}
+function scoreHour(stand,t,sun,moon){
+  const i=wxIndex(t); if(i<0) return null;
+  const H=WX.hourly; const dir=H.wind_direction_10m[i], sp=H.wind_speed_10m[i], pp=H.precipitation_probability?.[i]??0;
+  const legalA=new Date(+sun.rise-1800e3), legalB=new Date(+sun.set+1800e3);
+  if(t<legalA||t>legalB) return {score:0,dir,sp,legal:false};
+  const amEnd=new Date(+sun.rise+3*3600e3), pmStart=new Date(+sun.set-3*3600e3);
+  const slot=t<=amEnd?"am":t>=pmStart?"pm":"mid";
+  let tf=slot==="am"?stand.am:slot==="pm"?stand.pm:(inRut(t)?stand.rutMid:stand.mid);
+  const wf=windFit(stand,dir);
+  let sf=sp<3?.75:sp<=12?1:sp<=18?.75:.45;
+  let pf=pp>=70?.65:pp>=40?.85:1;
+  let bonus=0, per=null; for(const p of moon.periods){ if(t>=p[0]&&t<=p[1]){ bonus=Math.max(bonus,p[2]==="Major"?.15:.08); per=p[2]; } }
+  // pressure trend
+  let pr=0; if(i>=6&&H.pressure_msl){const d=H.pressure_msl[i]-H.pressure_msl[i-6]; if(d>1.5) pr=.06; else if(d<-2) pr=-.06;}
+  if(inRut(t)) bonus+=.05;
+  const score=Math.min(100,Math.round(82*wf.f*tf*sf*pf*(1+bonus+pr)));
+  return {score,dir,sp,pp,slot,wind:wf,per,legal:true};
+}
+function sunFor(day){
+  const st=SunCalc.getTimes(day,CLUB.LAT,CLUB.LON); return {rise:st.sunrise,set:st.sunset};
+}
+function planDay(day){
+  if(!LEASE) return {res:[]};
+  const sun=sunFor(day), moon=moonInfo(day);
+  const start=new Date(+sun.rise-1800e3); start.setMinutes(0,0,0);
+  const hours=[]; for(let t=new Date(start);t<=new Date(+sun.set+1800e3);t=new Date(+t+3600e3)) hours.push(t);
+  const res=LEASE.stands.map(s=>{
+    const hs=hours.map(t=>({t,r:scoreHour(s,t,sun,moon)})).filter(x=>x.r);
+    hs.forEach(x=>{if(x.r.legal){x.r.score=Math.min(100,Math.round(x.r.score*logFactorFor(s,x.r.dir).f))}});
+    const blocks={am:[],pm:[],mid:[]}; hs.forEach(x=>{if(x.r.legal) blocks[x.r.slot].push(x)});
+    const avg=a=>a.length?Math.round(a.reduce((s,x)=>s+x.r.score,0)/a.length):0;
+    const opts=[["am","Morning",blocks.am],["pm","Evening",blocks.pm],["mid","Midday",blocks.mid]].map(([k,n,a])=>({k,n,a,score:avg(a)})).filter(o=>o.a.length);
+    opts.sort((a,b)=>b.score-a.score);
+    const best=opts[0]||null;
+    return {s,hs,best,opts};
+  });
+  res.sort((a,b)=>(b.best?.score||0)-(a.best?.score||0));
+  return {sun,moon,res,hours};
+}
+
+/* ---------- render: hunt plan ---------- */
+let selDay=0;
+function dayDate(offset){const d=new Date();d.setHours(12,0,0,0);d.setDate(d.getDate()+offset);return d}
+function arrowSvg(dirFrom,size=22,color="#fff"){ // arrow pointing where wind blows TO
+  const to=(dirFrom+180)%360;
+  return `<svg width="${size}" height="${size}" viewBox="0 0 24 24" style="transform:rotate(${to}deg)"><path d="M12 2l6 12h-4.5v8h-3v-8H6z" fill="${color}"/></svg>`;
+}
+function cls(v){return v>=70?"g":v>=40?"o":"b"}
+function renderPlan(){
+  // days
+  const days=document.getElementById("days"); days.innerHTML="";
+  for(let i=0;i<7;i++){const d=dayDate(i);const b=document.createElement("button");b.setAttribute("aria-pressed",i===selDay);
+    let top=""; if(WX){const p=planDay(d); if(p.res[0]?.best) top=`${p.res[0].s.id} · ${p.res[0].best.score}`;}
+    b.innerHTML=`<span class="d">${i===0?"Today":d.toLocaleDateString("en-US",{timeZone:CLUB.TZ,weekday:"short"})}</span><span class="s">${d.toLocaleDateString("en-US",{timeZone:CLUB.TZ,month:"numeric",day:"numeric"})}</span><span class="s">${top||"&nbsp;"}</span>`;
+    b.onclick=()=>{selDay=i;renderPlan();drawCones()}; days.appendChild(b)}
+  const day=dayDate(selDay); const moon=moonInfo(day); const sun=sunFor(day);
+  const facts=document.getElementById("facts");
+  const majors=moon.periods.filter(p=>p[2]==="Major").map(p=>`${fmtT(p[0])}–${fmtT(p[1])}`).join(", ");
+  const minors=moon.periods.filter(p=>p[2]==="Minor").map(p=>`${fmtT(p[0])}–${fmtT(p[1])}`).join(", ");
+  let windAm="--", windPm="--";
+  if(WX){const ia=wxIndex(new Date(+sun.rise+3600e3)), ip=wxIndex(new Date(+sun.set-3600e3));
+    if(ia>=0) windAm=`${card(WX.hourly.wind_direction_10m[ia])} ${Math.round(WX.hourly.wind_speed_10m[ia])} mph · ${Math.round(WX.hourly.temperature_2m[ia])}°`;
+    if(ip>=0) windPm=`${card(WX.hourly.wind_direction_10m[ip])} ${Math.round(WX.hourly.wind_speed_10m[ip])} mph · ${Math.round(WX.hourly.temperature_2m[ip])}°`;}
+  facts.innerHTML=`
+    <div class="fact"><span class="k">Legal light</span><span class="v">${fmtT(new Date(+sun.rise-1800e3))} – ${fmtT(new Date(+sun.set+1800e3))}</span></div>
+    <div class="fact"><span class="k">Morning wind</span><span class="v">${windAm}</span></div>
+    <div class="fact"><span class="k">Evening wind</span><span class="v">${windPm}</span></div>
+    <div class="fact"><span class="k">Moon</span><span class="v" style="display:flex;gap:6px;align-items:center">${moonSvg(moon.phase,18)} ${moon.name}, ${Math.round(moon.ill*100)}%</span></div>
+    <div class="fact"><span class="k">Major periods</span><span class="v">${majors||"--"}</span></div>
+    <div class="fact"><span class="k">Minor periods</span><span class="v">${minors||"--"}</span></div>
+    ${inRut(day)?'<div class="fact"><span class="k">Season</span><span class="v g">Rut window: sit midday too</span></div>':""}`;
+  const picks=document.getElementById("picks"); picks.innerHTML="";
+  if(!LEASE){picks.innerHTML='<div class="note">Sign in to see the stands.</div>';return}
+  if(!WX){picks.innerHTML='<div class="note">Waiting for the weather forecast. Open the app once with signal and it will remember the week.</div>';return}
+  const p=planDay(day);
+  p.res.forEach((r,idx)=>{
+    if(!r.best) return;
+    const b=r.best; const mid=b.a[Math.floor(b.a.length/2)].r;
+    const t0=b.a[0].t, t1=new Date(+b.a[b.a.length-1].t+3600e3);
+    const per=b.a.find(x=>x.r.per)?.r.per;
+    const el=document.createElement("div"); el.className="pick"+(idx===0&&b.score>=60?" best":"");
+    const bars=r.hs.map(x=>`<i style="height:${Math.max(2,x.r.score*.46)}px;background:${x.r.score>=70?'var(--good)':x.r.score>=40?'var(--ok)':'var(--line)'}"></i>`).join("");
+    el.innerHTML=`<div class="badge">${r.s.id}</div>
+      <div style="min-width:0"><h3>${esc(r.s.name)}</h3>
+        <div class="w">${b.n} ${fmtT(t0)}–${fmtT(t1)} · wind ${card(mid.dir)} ${Math.round(mid.sp)} mph · <span class="${mid.wind.f>=1?'g':mid.wind.f>=.5?'o':'b'}">${mid.wind.txt}</span>${per?` · ${per} moon period`:""}</div>
+        <div class="why">${resBadge(r.s.id,day,b.k)}${esc(r.s.type)}${r.s.kids?" · kid friendly":""}. Needs ${r.s.winds[0][1]-r.s.winds[0][0]>=360?"any wind":r.s.winds.map(w=>card(w[0])+"–"+card(w[1])).join(", ")}.${logText(r.s.id)}</div>
+        <div class="hours" style="--n:${r.hs.length};margin-top:6px">${bars}</div>
+        <div class="hrlab"><span>${fmtT(r.hs[0].t)}</span><span>${fmtT(r.hs[r.hs.length-1].t)}</span></div>
+      </div>
+      <div class="score ${cls(b.score)}">${b.score}<small>/100</small></div>`;
+    el.onclick=()=>{map.setView(r.s.ll,18);standMarkers[r.s.id].openPopup();collapse(true)};
+    picks.appendChild(el);
+  });
+  const top=p.res[0];
+  document.getElementById("planNote").textContent=top?.best?.score>=60
+    ? `Go with ${top.s.id} (${top.s.name}). Scores weigh wind direction most, then time of day, wind speed, rain, pressure, moon periods, and once you have a few logged sits, where the club actually sees deer.`
+    : `No stand has a great wind this day. Hunt the best of the bunch or use it for scouting and road work.`;
+}
+
+/* ---------- top chips / cones ---------- */
+function renderChips(){
+  const now=new Date(); const moon=moonInfo((()=>{const d=new Date();d.setHours(12,0,0,0);return d})());
+  document.getElementById("moonIc").innerHTML=moonSvg(moon.phase,20);
+  document.getElementById("moonTxt").textContent=Math.round(moon.ill*100)+"%";
+  const i=wxIndex(now);
+  if(i>=0){const d=WX.hourly.wind_direction_10m[i], sp=WX.hourly.wind_speed_10m[i];
+    document.getElementById("windArr").innerHTML=arrowSvg(d);
+    document.getElementById("windTxt").textContent=card(d);
+    document.getElementById("windSp").textContent=Math.round(sp)+" mph";}
+}
+function drawCones(){
+  coneLayer.clearLayers(); if(!WX||!LEASE) return;
+  // use wind at the selected day's best window midpoint, or now for today
+  let t=new Date(); if(selDay>0){const d=dayDate(selDay); const s=sunFor(d); t=new Date(+s.set-2*3600e3)}
+  const i=wxIndex(t); if(i<0) return;
+  const dir=WX.hourly.wind_direction_10m[i]; const to=(dir+180)%360;
+  LEASE.stands.forEach(s=>{
+    const pts=[s.ll]; for(let a=-22;a<=22;a+=4) pts.push(dest(s.ll,to+a,180));
+    const fit=windFit(s,dir).f; const col=fit>=1?"#5fd38a":fit>=.5?"#e9c84a":"#ef6a5a";
+    L.polygon(pts,{color:col,weight:1,fillColor:col,fillOpacity:.18,interactive:false}).addTo(coneLayer);
+  });
+}
+function standPopup(s){
+  let html=`<h4>${esc(s.id)} · ${esc(s.name)}</h4><div>${esc(s.type)}${s.kids?" · kid friendly":""}</div><div style="margin-top:4px">${esc(s.why)}</div><div class="pop-m" style="margin-top:4px">Walk in: ${esc(s.walk)}</div>`;
+  if(WX){const i=wxIndex(new Date()); if(i>=0){const w=windFit(s,WX.hourly.wind_direction_10m[i]); html+=`<div class="pop-m">Wind now ${card(WX.hourly.wind_direction_10m[i])}: <span class="${w.f>=1?'g':w.f>=.5?'o':'b'}">${w.txt}</span></div>`}}
+  if(me) html+=`<div class="pop-m">${yd(dist(me,s.ll))} yd from you, heading ${card(bearing(me,s.ll))}</div>`;
+  html+=`<div class="pop-m">${s.ll[0]}, ${s.ll[1]}</div>`;
+  return withHuntButton(html,{stand:s.id,label:`${s.id} ${s.name}`,ll:s.ll});
+}
+function withHuntButton(html,spot){
+  const d=document.createElement("div"); d.innerHTML=html;
+  const who=CHECKINS.filter(c=>c.stand===spot.stand);
+  if(who.length) d.insertAdjacentHTML("beforeend",`<div style="margin-top:6px;color:var(--accent);font-weight:600">${who.map(c=>esc(c.name)+" here since "+fmtT(new Date(c.since))).join("<br>")}</div>`);
+  const upcoming=liveRes().filter(r=>r.stand===spot.stand).sort((a,b)=>String(a.date).localeCompare(String(b.date))).slice(0,3);
+  if(upcoming.length) d.insertAdjacentHTML("beforeend",`<div class="pop-m" style="margin-top:4px;color:var(--ok)">Reserved: ${upcoming.map(r=>`${esc(r.name)} ${r.date===dayKey(new Date())?"today":esc(r.date.slice(5))} ${esc(r.slot.toLowerCase())}`).join("; ")}</div>`);
+  const row=document.createElement("div"); row.className="mini"; row.style.marginTop="8px"; d.appendChild(row);
+  if(ME){const b=document.createElement("button");b.className="btn primary";b.textContent="I'm hunting here";b.onclick=()=>{checkIn(spot);map.closePopup()};row.appendChild(b)}
+  {const g=document.createElement("button");g.className="btn";g.textContent="Guide me";g.onclick=()=>{map.closePopup();guideTo(spot.label,spot.ll)};row.appendChild(g)}
+  if(ME&&!String(spot.stand).startsWith("gps")){const r=document.createElement("button");r.className="btn";r.textContent="Reserve";r.onclick=()=>{map.closePopup();openReserve(spot.stand)};row.appendChild(r)}
+  return d;
+}
+
+/* ---------- GPS ---------- */
+let me=null, meMarker=null, meCircle=null, watchId=null, follow=false;
+let track=S.get("track",{day:"",pts:[]}); if(track.day!==dayKey(new Date())) track={day:dayKey(new Date()),pts:[]};
+const trackLine=L.polyline(track.pts,{color:"#4aa3ff",weight:3,opacity:.8}).addTo(trackLayer);
+function startGps(){
+  if(!("geolocation" in navigator)){toast("This phone can't share location");return}
+  if(watchId!=null){follow=!follow;updateLocateBtn();if(follow&&me)map.setView(me,Math.max(map.getZoom(),17));return}
+  follow=true; updateLocateBtn();
+  watchId=navigator.geolocation.watchPosition(onPos,err=>{
+    document.getElementById("gpsTxt").textContent=err.code===1?"Location blocked":"No GPS fix";
+    toast(err.code===1?"Allow location for this site in Settings":"Still looking for GPS…");
+  },{enableHighAccuracy:true,maximumAge:5000,timeout:30000});
+}
+function updateLocateBtn(){document.getElementById("btnLocate").classList.toggle("on",follow)}
+function onPos(p){
+  me=[p.coords.latitude,p.coords.longitude]; const acc=p.coords.accuracy;
+  if(p.coords.heading!=null&&!isNaN(p.coords.heading)&&(p.coords.speed||0)>0.6&&!compassLive) setHeading(p.coords.heading);
+  if(!meMarker){meMarker=L.marker(me,{icon:L.divIcon({className:"lbl",html:'<div class="mewrap" id="mewrap"><svg class="cone" id="mecone" viewBox="0 0 90 90"><defs><radialGradient id="cg" cx="45" cy="45" r="45" gradientUnits="userSpaceOnUse"><stop offset=".15" stop-color="#4aa3ff" stop-opacity=".95"/><stop offset="1" stop-color="#4aa3ff" stop-opacity=".1"/></radialGradient></defs><path d="M45 45 L24 4 A45 45 0 0 1 66 4 Z" fill="url(#cg)" stroke="#fff" stroke-opacity=".7" stroke-width="1.5"/></svg><div class="me"></div></div>',iconSize:[90,90],iconAnchor:[45,45]}),zIndexOffset:1000,interactive:false}).addTo(map);if(lastHeading!=null)setHeading(lastHeading);meCircle=L.circle(me,{radius:acc,color:"#4aa3ff",weight:1,fillOpacity:.08,interactive:false}).addTo(map)}
+  else{meMarker.setLatLng(me);meCircle.setLatLng(me).setRadius(acc)}
+  if(follow) map.panTo(me);
+  updateNav(); bloodOnPos(); shareTick(p.coords); {const lk=!!reserveLock(); if(window._lockSeen!==lk){window._lockSeen=lk;renderRes()}}
+  if(!LEASE){document.getElementById("gpsDot").classList.add("on");document.getElementById("gpsTxt").textContent="GPS on";return}
+  const inside=inPoly(me,LEASE.boundary);
+  document.getElementById("gpsDot").classList.add("on");
+  let near=null,nd=1e9; LEASE.stands.forEach(s=>{const d=dist(me,s.ll);if(d<nd){nd=d;near=s}});
+  document.getElementById("gpsTxt").textContent=`${inside?"On lease":"Off lease"} · ${near.id} ${yd(nd)} yd ${card(bearing(me,near.ll))}`;
+  const last=track.pts[track.pts.length-1];
+  if(acc<40&&(!last||dist(last,me)>8)){track.pts.push(me);trackLine.setLatLngs(track.pts);S.set("track",track)}
+}
+let lastHeading=null, compassLive=false;
+function setHeading(h){
+  lastHeading=h; if(typeof updateNav==="function"&&navTarget) updateNav(); const w=document.getElementById("mewrap"), c=document.getElementById("mecone");
+  if(!w||!c) return; w.classList.add("hd"); c.style.transform=`rotate(${h}deg)`;
+}
+function onOrient(e){
+  let h=null;
+  if(typeof e.webkitCompassHeading==="number") h=e.webkitCompassHeading;           // iPhone
+  else if(e.absolute&&typeof e.alpha==="number") h=(360-e.alpha)%360;               // Android
+  if(h==null) return;
+  const so=(screen.orientation&&screen.orientation.angle)||window.orientation||0;
+  compassLive=true; setHeading((h+so+360)%360);
+}
+async function startCompass(){
+  if(window._compassOn) return;
+  window._compassOn=true;
+  window.addEventListener("deviceorientationabsolute",onOrient,true);
+  window.addEventListener("deviceorientation",onOrient,true);
+  try{
+    if(typeof DeviceOrientationEvent!=="undefined"&&typeof DeviceOrientationEvent.requestPermission==="function"){
+      const r=await DeviceOrientationEvent.requestPermission();
+      if(r!=="granted") toast("Compass not allowed. The cone will follow your walking direction instead.");
+    }
+  }catch(e){}
+}
+document.getElementById("btnLocate").onclick=()=>{startCompass();startGps()};
+document.getElementById("gpsChip").onclick=()=>{startCompass();startGps()};
+map.on("dragstart",()=>{if(follow){follow=false;updateLocateBtn()}});
+
+/* ---------- club pins (Google Sheet) ---------- */
+let PINS=S.get("pins",[]); let QUEUE=S.get("queue",[]);
+let CHECKINS=S.get("checkins",[]);
+const pinFilter=new Set(S.get("pinFilter",PIN_TYPES.map(t=>t.k)));
+function pinIcon(t){return L.divIcon({className:"lbl",html:`<div class="picon" style="background:${t.c}">${t.g}</div>`,iconSize:[26,26],iconAnchor:[13,13]})}
+function renderPins(){
+  pinLayer.clearLayers();
+  const live=PINS.filter(p=>!p.deleted);
+  live.filter(p=>pinFilter.has(p.type)).forEach(p=>{
+    const t=TYPE[p.type]||TYPE.note;
+    L.marker([+p.lat,+p.lon],{icon:pinIcon(t)}).bindPopup(()=>{
+      const d=document.createElement("div");
+      d.innerHTML=`<h4>${esc(t.name)}</h4>${p.note?`<div>${esc(p.note)}</div>`:""}<div class="pop-m">${esc(p.by||"Someone")} · ${new Date(p.t).toLocaleString("en-US",{timeZone:CLUB.TZ,month:"short",day:"numeric",hour:"numeric",minute:"2-digit"})}${p._pending?" · waiting to upload":""}</div><div class="pop-m">${(+p.lat).toFixed(6)}, ${(+p.lon).toFixed(6)}</div>`;
+      {const g=document.createElement("button");g.className="btn";g.style.marginTop="8px";g.style.marginRight="6px";g.textContent="Guide me";g.onclick=()=>{map.closePopup();guideTo((p.note||t.name).slice(0,40),[+p.lat,+p.lon])};d.appendChild(g)}
+      if(ME&&["stand","dblind","duck","turkey"].includes(p.type)){const h=document.createElement("button");h.className="btn primary";h.style.marginTop="8px";h.style.marginRight="6px";h.textContent="I'm hunting here";h.onclick=()=>{checkIn({stand:"pin:"+p.id,label:(p.note||t.name).slice(0,40),ll:[+p.lat,+p.lon]});map.closePopup()};d.appendChild(h)}
+      if(ME&&(ME.admin||p.by===ME.name)){
+        const b=document.createElement("button"); b.className="btn danger"; b.style.marginTop="8px"; b.textContent="Delete pin";
+        b.onclick=()=>{ if(b.dataset.sure){deletePin(p.id);map.closePopup()} else {b.dataset.sure=1;b.textContent="Tap again to delete"} };
+        d.appendChild(b);
+      }
+      return d;
+    }).addTo(pinLayer);
+  });
+  // filters
+  const f=document.getElementById("filters"); f.innerHTML="";
+  PIN_TYPES.forEach(t=>{const n=live.filter(p=>p.type===t.k).length;const b=document.createElement("button");b.setAttribute("aria-pressed",pinFilter.has(t.k));b.innerHTML=`<i style="background:${t.c}"></i>${t.name} ${n?`<span class="pop-m">${n}</span>`:""}`;b.onclick=()=>{pinFilter.has(t.k)?pinFilter.delete(t.k):pinFilter.add(t.k);S.set("pinFilter",[...pinFilter]);renderPins()};f.appendChild(b)});
+  const list=document.getElementById("plist"); list.innerHTML="";
+  const shown=live.filter(p=>pinFilter.has(p.type)).sort((a,b)=>new Date(b.t)-new Date(a.t));
+  if(!shown.length) list.innerHTML='<div class="note">No pins yet. Tap the orange + to drop one where you\'re standing, or at the crosshair.</div>';
+  shown.slice(0,200).forEach(p=>{const t=TYPE[p.type]||TYPE.note;const r=document.createElement("div");r.className="prow";
+    r.innerHTML=`<div class="picon" style="background:${t.c}">${t.g}</div><div style="min-width:0"><div class="t">${esc(t.name)}${p.note?` · <span style="font-weight:400">${esc(p.note)}</span>`:""}</div><div class="m">${esc(p.by||"Someone")} · ${new Date(p.t).toLocaleDateString("en-US",{timeZone:CLUB.TZ,month:"short",day:"numeric"})}${p._pending?" · not uploaded yet":""}</div></div><div class="m">${me?yd(dist(me,[+p.lat,+p.lon]))+" yd":""}</div>`;
+    r.onclick=()=>{map.setView([+p.lat,+p.lon],18);collapse(true)};list.appendChild(r)});
+  const st=document.getElementById("syncStatus");
+  st.textContent=!cfg.url?"The club sheet link isn't set up yet.":!cfg.code?"Sign in to share pins.":QUEUE.length?`${QUEUE.length} pin change(s) waiting for signal.`:`Synced${S.get("syncAt",0)?" "+new Date(S.get("syncAt",0)).toLocaleTimeString("en-US",{hour:"numeric",minute:"2-digit"}):""}.`;
+}
+async function api(method,body){
+  if(!cfg.url||!cfg.code) throw new Error("not set up");
+  if(method==="GET"){const r=await fetch(cfg.url+"?code="+encodeURIComponent(cfg.code));const j=await r.json();if(j.error){const e=new Error(j.error);e.logical=true;throw e}return j}
+  const r=await fetch(cfg.url,{method:"POST",headers:{"Content-Type":"text/plain;charset=utf-8"},body:JSON.stringify(Object.assign({code:cfg.code},body))});
+  const j=await r.json(); if(j.error){const e=new Error(j.error);e.logical=true;throw e} return j;
+}
+let syncing=false;
+async function sync(){
+  if(syncing||!cfg.url||!cfg.code) {renderPins();return}
+  syncing=true;
+  try{
+    while(QUEUE.length){
+      try{ const r=await api("POST",QUEUE[0]); onPosted(QUEUE[0],r); }
+      catch(e){ if(!e.logical||String(e.message).includes("bad code")) throw e; toast(e.message); }
+      QUEUE.shift(); S.set("queue",QUEUE);
+    }
+    const j=await api("GET");
+    applyServer(j);
+  }catch(e){ if(String(e.message).includes("bad code")){ toast("Your code no longer works. Ask the club for a new one."); signOut(true); } }
+  syncing=false; renderPins();
+}
+function applyServer(j){
+  ME=j.me; S.set("me",ME);
+  const fresh=JSON.stringify(j.lease||null)!==JSON.stringify(LEASE);
+  if(fresh){ const first=!LEASE; LEASE=j.lease||null; S.set("lease",LEASE); buildLease(first); }
+  const pending=PINS.filter(p=>p._pending);
+  PINS=(j.pins||[]).concat(pending.filter(p=>!(j.pins||[]).some(q=>q.id===p.id)));
+  if(!QUEUE.some(q=>q.action==="checkin"||q.action==="checkout")){CHECKINS=j.checkins||[];S.set("checkins",CHECKINS)}
+  if(!QUEUE.length){
+    const keepPhotos=Object.fromEntries(HARV.filter(h=>h._photo).map(h=>[h.id,h._photo]));
+    if(j.settings){CSET=j.settings;S.set("cset",CSET)}
+    RES=j.reservations||[]; SITS=j.sits||[]; TASKS=j.tasks||[]; MEMBERS=j.members||[];
+    HARV=(j.harvests||[]).map(h=>(!h.photoId&&keepPhotos[h.id])?Object.assign(h,{_photo:keepPhotos[h.id]}):h);
+    saveData();
+  }
+  const hadLocs=LOCS.length>0; LOCS=j.locations||[]; S.set("locs",LOCS); renderMates(); if(hadLocs!==(LOCS.length>0)) resetSyncTimer();
+  renderClubData();
+  renderHunters();
+  S.set("pins",PINS); S.set("syncAt",Date.now());
+  document.getElementById("whoami").textContent=ME?`${ME.name}${ME.admin?" (admin)":""}`:"Not signed in";
+  if(fresh) renderAll();
+}
+function signOut(silent){
+  cfg.code=""; S.set("cfg",cfg); ME=null; LEASE=null; PINS=[]; QUEUE=[]; CHECKINS=[]; RES=[]; SITS=[]; TASKS=[]; HARV=[]; MEMBERS=[];
+  ["me","lease","pins","queue","track","checkins","res","sits","tasks","harv","members"].forEach(k=>S.set(k,null)); hunterLayer.clearLayers();
+  stopNav(); taskLayer.clearLayers(); harvLayer.clearLayers(); LOCS=[]; S.set("locs",null); mateLayer.clearLayers(); shareOn=false; S.set("share",false);
+  buildLease(false); pinLayer.clearLayers(); coneLayer.clearLayers();
+  document.getElementById("whoami").textContent="Not signed in";
+  renderAll(); openSignIn(); if(!silent) toast("Signed out");
+}
+function openSignIn(){
+  document.getElementById("signUrlWrap").hidden=!!CLUB.SHEET_URL;
+  document.getElementById("signUrl").value=cfg.url||"";
+  document.getElementById("signMsg").textContent="";
+  document.getElementById("signModal").hidden=false;
+}
+document.getElementById("signForm").onsubmit=async e=>{
+  e.preventDefault();
+  const code=document.getElementById("signCode").value.trim();
+  if(!CLUB.SHEET_URL) cfg.url=document.getElementById("signUrl").value.trim();
+  const msg=document.getElementById("signMsg");
+  if(!cfg.url){msg.textContent="The club sheet link is missing.";return}
+  msg.textContent="Checking…"; document.getElementById("signBtn").disabled=true;
+  const old=cfg.code; cfg.code=code;
+  try{ const j=await api("GET"); S.set("cfg",cfg); applyServer(j); document.getElementById("signModal").hidden=true; toast(`Welcome, ${ME.name}`); renderAll(); }
+  catch(err){ cfg.code=old; msg.textContent=String(err.message).includes("bad code")?"That code isn't on the club list.":"Couldn't reach the club sheet. Check your signal and try again."; }
+  document.getElementById("signBtn").disabled=false;
+};
+document.getElementById("btnSignOut").onclick=()=>{const b=document.getElementById("btnSignOut"); if(b.dataset.sure){signOut(false);b.dataset.sure="";b.textContent="Sign out of this phone"} else {b.dataset.sure=1;b.textContent="Tap again to sign out"}};
+function addPin(p){
+  p._pending=true; PINS.push(p); S.set("pins",PINS);
+  QUEUE.push(Object.assign({action:"add"},strip(p))); S.set("queue",QUEUE);
+  renderPins(); sync().then(()=>{const q=PINS.find(x=>x.id===p.id); if(q&&!QUEUE.some(x=>x.id===p.id)) delete q._pending; S.set("pins",PINS); renderPins()});
+}
+function deletePin(id){
+  const p=PINS.find(x=>x.id===id); if(p) p.deleted=true; S.set("pins",PINS);
+  QUEUE=QUEUE.filter(q=>!(q.action==="add"&&q.id===id)); if(!p?._pending) QUEUE.push({action:"delete",id}); S.set("queue",QUEUE);
+  renderPins(); sync(); toast("Pin deleted");
+}
+const strip=p=>({id:p.id,t:p.t,lat:p.lat,lon:p.lon,type:p.type,note:p.note});
+
+/* ---------- who's out / check-ins ---------- */
+function checkIn(spot){
+  if(!ME){openSignIn();return}
+  const resv=reservedBy(spot.stand,new Date());
+  if(resv&&resv.name!==ME.name&&window._warnR!==spot.stand){window._warnR=spot.stand;toast(`${resv.name} reserved ${spot.label} ${resv.slot==="All day"?"all day today":"for this "+resv.slot.toLowerCase()}. Tap again to check in anyway.`);return}
+  window._warnR=null;
+  const taken=CHECKINS.find(c=>c.stand===spot.stand&&c.name!==ME.name);
+  if(taken&&!spot._ok){ if(!window._warned||window._warned!==spot.stand){window._warned=spot.stand;toast(`${taken.name} is already in ${spot.label}. Tap again to check in anyway.`);return} }
+  window._warned=null;
+  RES.filter(r=>r.name===ME.name&&r.stand===spot.stand&&String(r.date)===dayKey(new Date())).forEach(r=>r.used=true); S.set("res",RES);
+  CHECKINS=CHECKINS.filter(c=>c.name!==ME.name).concat([{name:ME.name,stand:spot.stand,label:spot.label,lat:spot.ll[0],lon:spot.ll[1],since:new Date().toISOString(),_pending:true}]);
+  S.set("checkins",CHECKINS);
+  QUEUE=QUEUE.filter(q=>q.action!=="checkin"&&!(q.action==="checkout"&&!q.name)); QUEUE.push({action:"checkin",stand:spot.stand,label:spot.label,lat:+(+spot.ll[0]).toFixed(6),lon:+(+spot.ll[1]).toFixed(6)}); S.set("queue",QUEUE);
+  document.getElementById("checkModal").hidden=true;
+  renderHunters(); toast(`Checked in: ${spot.label}`); sync();
+}
+function checkOut(name){
+  name=name||ME?.name; if(!name) return;
+  const was=CHECKINS.find(c=>c.name===name);
+  if(name===ME?.name&&was) setTimeout(()=>openSit({stand:was.stand,start:was.since}),450);
+  CHECKINS=CHECKINS.filter(c=>c.name!==name); S.set("checkins",CHECKINS);
+  if(name===ME.name) QUEUE=QUEUE.filter(q=>q.action!=="checkin");
+  QUEUE.push(name===ME.name?{action:"checkout"}:{action:"checkout",name}); S.set("queue",QUEUE);
+  renderHunters(); toast(name===ME.name?"Checked out. Safe trip back.":`Cleared ${name}`); sync();
+}
+function spotsForCheckin(){
+  const out=[];
+  (LEASE?.stands||[]).forEach(s=>out.push({stand:s.id,label:`${s.id} ${s.name}`,sub:s.type,ll:s.ll}));
+  PINS.filter(p=>!p.deleted&&["stand","dblind","duck","turkey"].includes(p.type)).forEach(p=>out.push({stand:"pin:"+p.id,label:(p.note||TYPE[p.type].name).slice(0,40),sub:TYPE[p.type].name+" pin by "+(p.by||"someone"),ll:[+p.lat,+p.lon]}));
+  (LEASE?.oldPins||[]).forEach(p=>out.push({stand:"Old "+p.n,label:"Old stand "+p.n,sub:p.note||"Old stand / camera site",ll:p.ll}));
+  if(me) out.forEach(o=>o.d=dist(me,o.ll)); 
+  out.sort((a,b)=>(a.d??0)-(b.d??0));
+  return out;
+}
+function openCheckin(){
+  if(!ME){openSignIn();return}
+  const list=document.getElementById("checkList"); list.innerHTML="";
+  if(me){const r=document.createElement("div");r.className="prow";r.innerHTML=`<div class="picon" style="background:#4aa3ff">Me</div><div><div class="t">Right where I am</div><div class="m">Uses your GPS location</div></div><div></div>`;r.onclick=()=>checkIn({stand:"gps:"+ME.name,label:"GPS spot",ll:me});list.appendChild(r)}
+  spotsForCheckin().slice(0,40).forEach(o=>{
+    const who=CHECKINS.filter(c=>c.stand===o.stand&&c.name!==ME.name).map(c=>c.name);
+    const r=document.createElement("div");r.className="prow";
+    r.innerHTML=`<div class="picon" style="background:var(--stand)">${esc(o.stand.startsWith("pin:")?"P":o.stand.replace("Old ","")).slice(0,3)}</div><div style="min-width:0"><div class="t">${esc(o.label)}</div><div class="m">${esc(o.sub)}${who.length?` · <span style="color:var(--accent)">${esc(who.join(", "))} here</span>`:""}</div></div><div class="m">${o.d!=null?yd(o.d)+" yd":""}</div>`;
+    r.onclick=()=>checkIn(o); list.appendChild(r);
+  });
+  document.getElementById("checkModal").hidden=false;
+}
+document.getElementById("checkCancel").onclick=()=>document.getElementById("checkModal").hidden=true;
+function renderHunters(){
+  hunterLayer.clearLayers();
+  CHECKINS.forEach(c=>{
+    L.marker([c.lat,c.lon],{icon:L.divIcon({className:"lbl",html:`<div class="hunter"><b></b><span>${esc(c.name)}</span></div>`,iconSize:[0,0]}),zIndexOffset:900,interactive:false}).addTo(hunterLayer);
+  });
+  Object.entries(standMarkers).forEach(([id,m])=>{const el=m.getElement()?.querySelector(".stand-ic"); if(el) el.classList.toggle("busy",CHECKINS.some(c=>c.stand===id))});
+  const n=CHECKINS.length;
+  document.getElementById("outTxt").textContent=n?`${n} hunting`:"Nobody out";
+  document.getElementById("outDot").classList.toggle("on",n>0);
+  const mine=ME&&CHECKINS.find(c=>c.name===ME.name);
+  const mc=document.getElementById("myCheck"); mc.innerHTML="";
+  if(ME){
+    const b=document.createElement("button"); b.className="btn "+(mine?"":"primary"); b.style.width="100%";
+    b.textContent=mine?`Check out of ${mine.label}`:"Check in to a stand";
+    b.onclick=()=>mine?checkOut():openCheckin(); mc.appendChild(b);
+  } else mc.innerHTML='<div class="note">Sign in to check in.</div>';
+  const list=document.getElementById("outList"); list.innerHTML="";
+  if(!n) list.innerHTML='<div class="note">Nobody is checked in right now.</div>';
+  CHECKINS.slice().sort((a,b)=>new Date(a.since)-new Date(b.since)).forEach(c=>{
+    const r=document.createElement("div"); r.className="prow";
+    const mins=Math.round((Date.now()-new Date(c.since))/60000); const ago=mins<60?`${mins} min`:`${Math.floor(mins/60)} h ${mins%60} min`;
+    r.innerHTML=`<div class="picon" style="background:#ff7a3d">${esc(c.name.slice(0,2))}</div><div style="min-width:0"><div class="t">${esc(c.name)} · ${esc(c.label)}</div><div class="m">since ${fmtT(new Date(c.since))} (${ago})${c._pending?" · waiting for signal":""}</div></div><div class="m">${me?yd(dist(me,[c.lat,c.lon]))+" yd":""}</div>`;
+    r.onclick=()=>{map.setView([c.lat,c.lon],18);collapse(true)};
+    if(ME&&ME.admin&&c.name!==ME.name){const x=document.createElement("button");x.className="btn danger";x.textContent="Clear";x.style.padding="6px 10px";x.onclick=ev=>{ev.stopPropagation();checkOut(c.name)};r.lastElementChild.replaceWith(x)}
+    list.appendChild(r);
+  });
+}
+document.getElementById("outChip").onclick=()=>{selectTab("out");collapse(false)};
+
+/* ---------- add pin modal ---------- */
+let addWhere="gps", addType="scrape";
+const modal=document.getElementById("addModal");
+function openAdd(){
+  if(!ME){openSignIn();return}
+  addWhere=me?"gps":"map"; renderWhere();
+  const tb=document.getElementById("typeBtns"); tb.innerHTML="";
+  PIN_TYPES.forEach(t=>{const b=document.createElement("button");b.type="button";b.setAttribute("aria-pressed",t.k===addType);b.innerHTML=`<i style="background:${t.c}"></i>${t.name}`;b.onclick=()=>{addType=t.k;[...tb.children].forEach(c=>c.setAttribute("aria-pressed",c===b))};tb.appendChild(b)});
+  document.getElementById("pinNote").value=""; modal.hidden=false;
+}
+function renderWhere(){
+  document.getElementById("whereGps").setAttribute("aria-pressed",addWhere==="gps");
+  document.getElementById("whereMap").setAttribute("aria-pressed",addWhere==="map");
+  document.getElementById("whereGps").classList.toggle("primary",addWhere==="gps");
+  document.getElementById("whereMap").classList.toggle("primary",addWhere==="map");
+  document.getElementById("cross").classList.toggle("show",addWhere==="map");
+  const c=map.getCenter();
+  document.getElementById("whereTxt").textContent=addWhere==="gps"?(me?`${me[0].toFixed(6)}, ${me[1].toFixed(6)}`:"No GPS fix yet. Tap the location button, or use the crosshair."):`Crosshair: ${c.lat.toFixed(6)}, ${c.lng.toFixed(6)}. Close this, move the map, then tap + again.`;
+}
+document.getElementById("whereGps").onclick=()=>{if(!me){startGps();toast("Getting your location…")}addWhere="gps";renderWhere()};
+document.getElementById("whereMap").onclick=()=>{addWhere="map";renderWhere()};
+document.getElementById("pinCancel").onclick=()=>{modal.hidden=true;document.getElementById("cross").classList.remove("show")};
+document.getElementById("addForm").onsubmit=e=>{
+  e.preventDefault();
+  let ll; if(addWhere==="gps"){ if(!me){toast("No GPS fix yet");return} ll=me } else { const c=map.getCenter(); ll=[c.lat,c.lng] }
+  addPin({id:Date.now().toString(36)+Math.random().toString(36).slice(2,7),t:new Date().toISOString(),lat:+ll[0].toFixed(6),lon:+ll[1].toFixed(6),type:addType,note:document.getElementById("pinNote").value.trim().slice(0,300),by:ME.name});
+  modal.hidden=true; document.getElementById("cross").classList.remove("show"); toast(TYPE[addType].name+" pinned");
+};
+document.getElementById("btnAdd").onclick=()=>{ if(document.getElementById("cross").classList.contains("show")&&modal.hidden){modal.hidden=false;renderWhere();return} openAdd() };
+map.on("move",()=>{if(!modal.hidden&&addWhere==="map")renderWhere()});
+
+/* ---------- sheet / tabs ---------- */
+function selectTab(p){document.querySelectorAll(".tabs button").forEach(b=>b.setAttribute("aria-selected",b.dataset.p===p));document.querySelectorAll(".pane").forEach(x=>x.classList.toggle("on",x.id==="p-"+p));S.set("tab",p)}
+document.querySelectorAll(".tabs button").forEach(b=>b.onclick=()=>{selectTab(b.dataset.p);collapse(false)});
+function collapse(v){document.body.classList.toggle("min",v);document.getElementById("gripPath").setAttribute("d",v?"M6 15l6-6 6 6":"M6 9l6 6 6-6");setTimeout(()=>map.invalidateSize(),250)}
+document.getElementById("grip").onclick=()=>collapse(!document.body.classList.contains("min"));
+selectTab(S.get("tab","today"));
+
+/* ---------- layers pane ---------- */
+function renderLayers(){
+  const bl=document.getElementById("baseLayers"); bl.innerHTML="";
+  Object.keys(bases).forEach(n=>{const l=document.createElement("label");l.innerHTML=`<input type="radio" name="base" ${n===baseName?"checked":""}> ${n}`;l.querySelector("input").onchange=()=>{map.removeLayer(bases[baseName]);baseName=n;bases[n].addTo(map);bases[n].bringToBack();S.set("base",n)};bl.appendChild(l)});
+  const ol=document.getElementById("overLayers"); ol.innerHTML="";
+  Object.keys(ov).forEach(n=>{const l=document.createElement("label");l.innerHTML=`<input type="checkbox" ${map.hasLayer(ov[n])?"checked":""}> ${n}`;l.querySelector("input").onchange=e=>{e.target.checked?ov[n].addTo(map):map.removeLayer(ov[n]);S.set("ov",Object.keys(ov).filter(k=>map.hasLayer(ov[k])))};ol.appendChild(l)});
+}
+document.getElementById("btnFit").onclick=()=>{collapse(true);setTimeout(fitLease,260)};
+document.getElementById("btnClearTrack").onclick=()=>{track={day:dayKey(new Date()),pts:[]};trackLine.setLatLngs([]);S.set("track",track);toast("Track cleared")};
+
+/* ---------- settings ---------- */
+const $=id=>document.getElementById(id);
+$("setUrl").value=cfg.url;$("whoami").textContent=ME?`${ME.name}${ME.admin?" (admin)":""}`:"Not signed in";$("setRutA").value=cfg.rutA;$("setRutB").value=cfg.rutB;
+$("btnSave").onclick=()=>{cfg.url=$("setUrl").value.trim()||CLUB.SHEET_URL;cfg.rutA=$("setRutA").value;cfg.rutB=$("setRutB").value;S.set("cfg",cfg);toast("Saved");sync();renderPlan()};
+
+function renderLegend(){
+  const lg=document.getElementById("legend"); let h="";
+  if(map.hasLayer(ov["Elevation (high / low)"])) h+=`<div class="bar">Low<span>${["#2c7bb6","#00a6ca","#00ccbc","#90eb9d","#ffff8c","#f98d59","#d7191c"].map(c=>`<i style="background:${c}"></i>`).join("")}</span>High</div><div style="color:var(--muted)">395 · 410 · 425 · 440 · 455 · 470 ft</div>`;
+  if(map.hasLayer(ov["Slope (flat / steep)"])) h+=`<div class="bar">Flat<span>${["#2e7d32","#8bc34a","#fdd835","#f57c00","#b71c1c"].map(c=>`<i style="background:${c}"></i>`).join("")}</span>Steep</div>`;
+  lg.innerHTML=h; lg.hidden=!h;
+}
+map.on("layeradd layerremove",renderLegend);
+// USGS servers drop the odd tile; retry each failed tile twice
+[ov["Elevation (high / low)"],ov["Slope (flat / steep)"],ov["10 ft contours"],bases["LiDAR terrain"]].forEach(l=>l.on("tileerror",e=>{const n=(e.tile._tries||0)+1;if(n>2)return;e.tile._tries=n;const src=e.tile.src;setTimeout(()=>{e.tile.src=src+(src.includes("?")?"&":"?")+"retry="+n},700*n)}));
+
+/* ---------- offline ---------- */
+if("serviceWorker" in navigator && /^https?:$/.test(location.protocol)) navigator.serviceWorker.register("sw.js").catch(()=>{});
+function tilesFor(bounds,z){
+  const n=2**z, lx=lon=>Math.floor((lon+180)/360*n), ly=lat=>{const r=lat*Math.PI/180;return Math.floor((1-Math.log(Math.tan(r)+1/Math.cos(r))/Math.PI)/2*n)};
+  const out=[]; for(let x=lx(bounds.getWest());x<=lx(bounds.getEast());x++) for(let y=ly(bounds.getNorth());y<=ly(bounds.getSouth());y++) out.push({x,y,z}); return out;
+}
+async function saveOffline(){
+  const st=document.getElementById("offlineStatus"), btn=document.getElementById("btnOffline");
+  if(!LEASE){st.textContent="Sign in first.";return}
+  if(!("caches" in window)){st.textContent="This browser can't save maps.";return}
+  btn.disabled=true;
+  const b=L.polygon(LEASE.boundary).getBounds().pad(0.15);
+  const layers=[bases["Aerial"],ov["10 ft contours"],ov["Elevation (high / low)"],ov["Slope (flat / steep)"],bases["LiDAR terrain"],bases["Topo"]];
+  const jobs=[]; for(let z=13;z<=18;z++) for(const c of tilesFor(b,z)) for(const l of layers){ const nz=l.options.maxNativeZoom||18; if(z>nz) continue; jobs.push(l.getTileUrl(c)); }
+  const cache=await caches.open("hc-tiles-v1"); let done=0, fail=0, i=0;
+  async function worker(){ while(i<jobs.length){ const u=jobs[i++]; try{ if(!(await cache.match(u))){ const r=await fetch(u,{mode:"cors"}); if(r.ok) await cache.put(u,r); else fail++; } }catch(e){fail++} done++; if(done%10===0||done===jobs.length) st.textContent=`Saving map… ${Math.round(done/jobs.length*100)}%`; } }
+  await Promise.all(Array.from({length:8},worker));
+  S.set("offlineAt",Date.now());
+  st.textContent=fail?`Saved ${jobs.length-fail} of ${jobs.length} map pieces. Run it again on better signal to get the rest.`:`Lease map saved for offline (${jobs.length} pieces).`;
+  btn.disabled=false; btn.textContent="Update saved map";
+}
+document.getElementById("btnOffline").onclick=saveOffline;
+if(S.get("offlineAt",0)){document.getElementById("offlineStatus").textContent="Lease map saved "+new Date(S.get("offlineAt",0)).toLocaleDateString("en-US",{month:"short",day:"numeric"})+".";document.getElementById("btnOffline").textContent="Update saved map"}
+
+/* ================= club data: reservations, sits, tasks, harvests ================= */
+let LOCS=S.get("locs",[]);
+let CSET=Object.assign({reservations:"on",on_property_only:"yes",days_ahead:1,morning_opens_minutes_before:null,morning_no_show_minutes:30,evening_no_show_minutes:30},S.get("cset",{}));
+let RES=S.get("res",[]), SITS=S.get("sits",[]), TASKS=S.get("tasks",[]), HARV=S.get("harv",[]), MEMBERS=S.get("members",[]);
+function saveData(){S.set("res",RES);S.set("sits",SITS);S.set("tasks",TASKS);S.set("harv",HARV);S.set("members",MEMBERS)}
+const uid=()=>Date.now().toString(36)+Math.random().toString(36).slice(2,7);
+const $$=id=>document.getElementById(id);
+function showModal(id){$$(id).hidden=false}
+function hideModal(id){$$(id).hidden=true}
+document.querySelectorAll("[data-close]").forEach(b=>b.onclick=()=>b.closest(".modal").hidden=true);
+function enqueue(item){QUEUE.push(item);S.set("queue",QUEUE);saveData();renderClubData();sync()}
+function onPosted(item,r){
+  if(item.action==="addHarvest"&&r&&r.photoId){const h=HARV.find(x=>x.id===item.id);if(h){h.photoId=r.photoId;delete h._photo;saveData()}}
+}
+const canEdit=row=>ME&&(ME.admin||row.name===ME.name||row.by===ME.name);
+function spotList(){return spotsForCheckin().map(o=>({stand:o.stand,label:o.label,ll:o.ll}))}
+function fillSpots(sel,current){
+  sel.innerHTML=""; const opts=spotList();
+  if(me) opts.unshift({stand:"gps",label:"Where I'm standing (GPS)",ll:me});
+  opts.forEach(o=>{const op=document.createElement("option");op.value=o.stand;op.textContent=o.label;op._spot=o;if(o.stand===current)op.selected=true;sel.appendChild(op)});
+}
+const pickedSpot=sel=>sel.options[sel.selectedIndex]?._spot;
+function chips(el,items,cur,onPick){
+  el.innerHTML=""; items.forEach(v=>{const b=document.createElement("button");b.type="button";b.textContent=v;b.setAttribute("aria-pressed",v===cur);b.onclick=()=>{[...el.children].forEach(c=>c.setAttribute("aria-pressed",c===b));onPick(v)};el.appendChild(b)});
+}
+const localISO=(date,hm)=>new Date(`${date}T${hm||"00:00"}`).toISOString();
+const hm=d=>{const x=new Date(d);return String(x.getHours()).padStart(2,"0")+":"+String(x.getMinutes()).padStart(2,"0")};
+const ymd=d=>dayKey(new Date(d));
+function renderClubData(){renderRes();renderLog();renderTasks();renderTaskLayer();renderHarvLayer()}
+
+/* ---------- legal light ---------- */
+function renderLight(){
+  const noon=o=>{const d=new Date();d.setHours(12,0,0,0);d.setDate(d.getDate()+o);return d};
+  const s=sunFor(noon(0)), now=new Date(), a=new Date(+s.rise-1800e3), b=new Date(+s.set+1800e3);
+  const mm=ms=>{const m=Math.max(0,Math.round(ms/60000));return m>=60?`${Math.floor(m/60)}h ${m%60}m`:`${m} min`};
+  let txt, warn=false;
+  if(now<a){txt=`Shooting light in ${mm(a-now)}`;warn=a-now<15*60000}
+  else if(now<=b){txt=`Light ends ${fmtT(b).replace(/ ?[AP]M/,"")} · ${mm(b-now)}`;warn=b-now<20*60000}
+  else{const n=sunFor(noon(1));txt=`Light over · ${fmtT(new Date(+n.rise-1800e3))} tmrw`}
+  const el=$$("lightTxt"); el.textContent=txt; el.style.color=warn?"var(--ok)":"";
+}
+
+/* ---------- guide me ---------- */
+let navTarget=null;
+const navLine=L.polyline([],{color:"#4aa3ff",weight:4,dashArray:"8 8",interactive:false}).addTo(navLayer);
+function guideTo(label,ll){
+  navTarget={label,ll:[+ll[0],+ll[1]],arrived:false}; $$("navBar").hidden=false;
+  if(!me){startCompass();startGps()} else {follow=true;updateLocateBtn();map.setView(me,Math.max(map.getZoom(),17))}
+  collapse(true); updateNav();
+}
+function updateNav(){
+  if(!navTarget) return;
+  $$("navTitle").textContent=navTarget.label;
+  if(!me){$$("navSub").textContent="Waiting for GPS…";return}
+  const d=dist(me,navTarget.ll), br=bearing(me,navTarget.ll);
+  navLine.setLatLngs([me,navTarget.ll]);
+  $$("navSub").textContent=`${yd(d)} yd · head ${card(br)}${lastHeading==null?" (arrow is north-up)":""}`;
+  $$("navArrow").style.transform=`rotate(${lastHeading==null?br:br-lastHeading}deg)`;
+  if(d<12&&!navTarget.arrived){navTarget.arrived=true;toast(`You're at ${navTarget.label}`)}
+}
+function stopNav(){navTarget=null;navLine.setLatLngs([]);$$("navBar").hidden=true}
+$$("navStop").onclick=stopNav;
+
+/* ---------- reservations ---------- */
+let resDay=0;
+const SLOTS=["Morning","Evening","All day"];
+function slotNow(){const s=sunFor((()=>{const d=new Date();d.setHours(12,0,0,0);return d})());return new Date()<new Date((+s.rise+ +s.set)/2)?"Morning":"Evening"}
+function noShow(r){
+  if(r.used===true||String(r.date)!==dayKey(new Date())) return false;
+  const s=sunFor((()=>{const d=new Date();d.setHours(12,0,0,0);return d})());
+  const eve=r.slot==="Evening", start=eve?+s.set-3*3600e3:+s.rise-30*60e3;
+  return Date.now()>start+(eve?(+CSET.evening_no_show_minutes||30):(+CSET.morning_no_show_minutes||30))*60e3;
+}
+const liveRes=()=>RES.filter(r=>String(r.date)>=dayKey(new Date())&&!noShow(r));
+function onProperty(ll){
+  if(!LEASE||!ll) return false; if(inPoly(ll,LEASE.boundary)) return true;
+  const B=LEASE.boundary; let best=1e9;
+  for(let i=0;i<B.length;i++){const a=B[i],b=B[(i+1)%B.length];
+    const kx=111320*Math.cos(ll[0]*Math.PI/180),ky=110540,ax=(a[1]-ll[1])*kx,ay=(a[0]-ll[0])*ky,bx=(b[1]-ll[1])*kx,by=(b[0]-ll[0])*ky,dx=bx-ax,dy=by-ay;
+    const t=Math.max(0,Math.min(1,-(ax*dx+ay*dy)/(dx*dx+dy*dy||1))); best=Math.min(best,Math.hypot(ax+t*dx,ay+t*dy))}
+  return best<=60;
+}
+function slotTimes(dateKey){const s=sunFor(new Date(dateKey+"T12:00:00"));const sl=+s.rise-30*60e3;const mo=CSET.morning_opens_minutes_before;return {opens:(mo===null||mo===undefined||mo==="")?-Infinity:sl-(+mo)*60e3,noon:(+s.rise+ +s.set)/2,eveEnd:+s.set+30*60e3,shoot:sl}}
+function openSlots(dateKey){
+  if(ME?.admin) return SLOTS.slice();
+  const t=slotTimes(dateKey), now=Date.now(), out=[];
+  const today=dateKey===dayKey(new Date());
+  if(today?(now>=t.opens&&now<=t.noon):true) out.push("Morning","All day");
+  if(!today||now<=t.eveEnd) out.push("Evening");
+  return out;
+}
+function reserveLock(){
+  if(!ME) return "Sign in first.";
+  if(CSET.reservations==="off") return "Reservations are turned off for the club.";
+  if(CSET.on_property_only==="yes"&&!ME.admin){ if(!me) return "Turn on your location. Reservations unlock when you're on the property."; if(!onProperty(me)) return "Reservations unlock when you're on the property."; }
+  if(!ME.admin&&!openSlots(dayKey(new Date())).length&&!(+CSET.days_ahead>0)){const tm=slotTimes(dayKey(dayDate(1)));return isFinite(tm.opens)?`Morning reservations open at ${fmtT(new Date(tm.opens))}.`:"Nothing left to reserve today."}
+  return "";
+}
+function reservedBy(stand,date,slot){
+  const k=dayKey(date); slot=slot||slotNow();
+  return liveRes().find(r=>r.stand===stand&&String(r.date)===k&&(r.slot===slot||r.slot==="All day"||slot==="All day"));
+}
+function resBadge(stand,day,slotKey){
+  const slot=slotKey==="am"?"Morning":slotKey==="pm"?"Evening":"All day";
+  const r=reservedBy(stand,day,slot); return r?`<span class="o">Reserved by ${esc(r.name)}. </span>`:"";
+}
+let resSlot="Morning";
+function openReserve(standId){
+  if(!ME){openSignIn();return}
+  const lock=reserveLock(); if(lock){toast(lock); if(!me){startCompass();startGps()} return}
+  const ds=$$("resDate"); ds.innerHTML="";
+  const ahead=ME.admin?Math.max(+CSET.days_ahead||0,6):(+CSET.days_ahead||0);
+  for(let i=0;i<=ahead;i++){const d=dayDate(i);const o=document.createElement("option");o.value=dayKey(d);o.textContent=i===0?"Today":i===1?"Tomorrow":fmtD(d);if(i===resDay)o.selected=true;ds.appendChild(o)}
+  [...ds.options].forEach(o=>{if(!openSlots(o.value).length)o.remove()}); if(ds.selectedIndex<0&&ds.options.length)ds.selectedIndex=0;
+  const setSlots=()=>{const av=openSlots(ds.value);resSlot=av.includes(resSlot)?resSlot:av[0];chips($$("resSlots"),av,resSlot,v=>resSlot=v)};
+  ds.onchange=()=>{resSlot=openSlots(ds.value)[0];setSlots()}; resSlot="Morning"; setSlots();
+  fillSpots($$("resStand"),standId); [...$$("resStand").options].forEach(o=>{if(o.value==="gps")o.remove()});
+  $$("resMsg").textContent=""; showModal("resModal");
+}
+$$("resForm").onsubmit=e=>{
+  e.preventDefault(); const sp=pickedSpot($$("resStand")); const date=$$("resDate").value;
+  if(!sp){$$("resMsg").textContent="Pick a stand.";return}
+  if(!resSlot){$$("resMsg").textContent="Nothing to reserve right now.";return}
+  const ov=r=>String(r.date)===date&&(r.slot===resSlot||r.slot==="All day"||resSlot==="All day");
+  const clash=liveRes().find(r=>ov(r)&&r.stand===sp.stand&&r.name!==ME.name);
+  if(clash){$$("resMsg").textContent=`${clash.name} already has ${sp.label} for that time.`;return}
+  const mine=liveRes().find(r=>ov(r)&&r.name===ME.name&&r.stand!==sp.stand);
+  if(mine&&!ME.admin){$$("resMsg").textContent=`You already have ${mine.label} for that hunt. Remove it first.`;return}
+  const r={id:uid(),name:ME.name,stand:sp.stand,label:sp.label,date,slot:resSlot,used:false,_pending:true};
+  RES.push(r); hideModal("resModal"); toast(`Reserved ${sp.label}`);
+  enqueue({action:"reserve",id:r.id,stand:r.stand,label:r.label,date:r.date,slot:r.slot,lat:me?+me[0].toFixed(6):"",lon:me?+me[1].toFixed(6):""});
+};
+function unreserve(id){RES=RES.filter(r=>r.id!==id);enqueue({action:"unreserve",id});toast("Reservation removed")}
+$$("btnReserve").onclick=()=>openReserve();
+const mins=m=>m>=60?`${Math.floor(m/60)} h${m%60?" "+m%60+" min":""}`:`${m} min`;
+function renderRes(){
+  const days=$$("resDays"); days.innerHTML="";
+  for(let i=0;i<=Math.max(+CSET.days_ahead||0,1);i++){const d=dayDate(i);const k=dayKey(d);const n=liveRes().filter(r=>String(r.date)===k).length;
+    const b=document.createElement("button");b.setAttribute("aria-pressed",i===resDay);
+    b.innerHTML=`<span class="d">${i===0?"Today":d.toLocaleDateString("en-US",{timeZone:CLUB.TZ,weekday:"short"})}</span><span class="s">${d.toLocaleDateString("en-US",{timeZone:CLUB.TZ,month:"numeric",day:"numeric"})}</span><span class="s">${n?n+" taken":"&nbsp;"}</span>`;
+    b.onclick=()=>{resDay=i;renderRes()};days.appendChild(b)}
+  const lock=reserveLock(); $$("btnReserve").textContent=lock?"Reserve a stand (unlocks on the property)":"Reserve a stand";
+  $$("btnReserve").classList.toggle("primary",!lock);
+  const nt=Date.now()>slotTimes(dayKey(new Date())).noon?slotTimes(dayKey(dayDate(1))):slotTimes(dayKey(new Date()));
+  const ahead=+CSET.days_ahead||0;
+  $$("resRules").textContent=CSET.reservations==="off"?"Reservations are turned off.":`${CSET.on_property_only==="yes"?"Reserve from the property: at camp or on the lease. ":""}${ahead===0?"Day of the hunt only":ahead===1?"Book for today or the night before":`Book up to ${ahead} days ahead`}, one stand per hunt. A morning stand is held until ${mins(+CSET.morning_no_show_minutes||30)} after shooting light (${fmtT(new Date(nt.shoot+(+CSET.morning_no_show_minutes||30)*60e3))}); if you haven't checked in by then, it's open to anyone. Evening stands are held until ${mins(+CSET.evening_no_show_minutes||30)} after the evening hunt starts.`;
+  const k=dayKey(dayDate(resDay)), list=$$("resList"); list.innerHTML="";
+  const rows=liveRes().filter(r=>String(r.date)===k).sort((a,b)=>SLOTS.indexOf(a.slot)-SLOTS.indexOf(b.slot));
+  if(!rows.length) list.innerHTML='<div class="note">No stands reserved this day.</div>';
+  rows.forEach(r=>{const el=document.createElement("div");el.className="prow";
+    el.innerHTML=`<div class="picon" style="background:#c9a227;color:#1b1503">${esc(r.slot[0])}</div><div style="min-width:0"><div class="t">${esc(r.label)}</div><div class="m">${esc(r.slot)} · ${esc(r.name)}${r.used===true?" · in the stand":""}${r._pending?" · waiting for signal":""}</div></div><div></div>`;
+    if(canEdit(r)){const x=document.createElement("button");x.className="btn danger";x.style.padding="6px 10px";x.textContent="Remove";x.onclick=ev=>{ev.stopPropagation();unreserve(r.id)};el.lastElementChild.replaceWith(x)}
+    list.appendChild(el)});
+}
+
+/* ---------- sit log ---------- */
+function openSit(pre={}){
+  if(!ME){openSignIn();return}
+  fillSpots($$("sitStand"),pre.stand);
+  const end=new Date(), start=pre.start?new Date(pre.start):new Date(Date.now()-3*3600e3);
+  $$("sitDate").value=ymd(start); $$("sitStart").value=hm(start); $$("sitEnd").value=hm(end);
+  ["sitDoes","sitBucks"].forEach(i=>$$(i).value="0"); $$("sitOther").value=""; $$("sitNotes").value="";
+  const w=windAt(new Date((+start + +end)/2)); $$("sitWind").textContent=w?`Wind saved with the sit: ${card(w.dir)} ${Math.round(w.sp)} mph`:"No forecast for that time; wind will be left blank.";
+  showModal("sitModal");
+}
+function windAt(t){const i=wxIndex(t);return i>=0?{dir:WX.hourly.wind_direction_10m[i],sp:WX.hourly.wind_speed_10m[i]}:null}
+$$("sitForm").onsubmit=e=>{
+  e.preventDefault(); const sp=pickedSpot($$("sitStand")); if(!sp) return;
+  const date=$$("sitDate").value, start=localISO(date,$$("sitStart").value), end=localISO(date,$$("sitEnd").value);
+  const w=windAt(new Date((Date.parse(start)+Date.parse(end))/2));
+  const s={id:uid(),name:ME.name,stand:sp.stand==="gps"?"gps":sp.stand,label:sp.label,date,start,end,windDir:w?Math.round(w.dir):"",windMph:w?Math.round(w.sp):"",
+    does:+$$("sitDoes").value||0,bucks:+$$("sitBucks").value||0,other:$$("sitOther").value.trim(),notes:$$("sitNotes").value.trim(),_pending:true};
+  SITS.unshift(s); hideModal("sitModal"); toast("Sit logged");
+  const {_pending,...send}=s; enqueue(Object.assign({action:"logSit"},send));
+};
+function deleteSit(id){SITS=SITS.filter(s=>s.id!==id);enqueue({action:"deleteSit",id});toast("Sit deleted")}
+$$("btnLogSit").onclick=()=>openSit({stand:CHECKINS.find(c=>c.name===ME?.name)?.stand,start:CHECKINS.find(c=>c.name===ME?.name)?.since});
+const deer=s=>(+s.does||0)+(+s.bucks||0);
+const sector=d=>Math.round(((+d%360)+360)%360/45)%8;
+const SECT=["N","NE","E","SE","S","SW","W","NW"];
+function standLog(id){
+  const mine=SITS.filter(s=>s.stand===id), all=SITS;
+  const avg=a=>a.length?a.reduce((t,s)=>t+deer(s),0)/a.length:0;
+  return {n:mine.length,avg:avg(mine),bucks:mine.reduce((t,s)=>t+(+s.bucks||0),0),allN:all.length,allAvg:avg(all),mine};
+}
+function logFactorFor(stand,dir){
+  const L_=standLog(stand.id); if(L_.n<3||L_.allN<5) return {f:1};
+  const clamp=(v,a)=>Math.max(-a,Math.min(a,v));
+  let f=1+clamp((L_.avg-L_.allAvg)/Math.max(L_.allAvg,1),.3)*Math.min(1,L_.n/8);
+  const sec=L_.mine.filter(s=>s.windDir!==""&&sector(s.windDir)===sector(dir));
+  if(sec.length>=3){const a=sec.reduce((t,s)=>t+deer(s),0)/sec.length; f*=1+clamp((a-L_.avg)/Math.max(L_.avg,1),.2)*Math.min(1,sec.length/6)}
+  return {f};
+}
+function logText(id){const L_=standLog(id);return L_.n?` Club log: ${L_.avg.toFixed(1)} deer per sit over ${L_.n} sit${L_.n>1?"s":""}.`:""}
+function renderLog(){
+  const st=$$("standStats"); st.innerHTML="";
+  const ids=[...new Set([...(LEASE?.stands||[]).map(s=>s.id),...SITS.map(s=>s.stand)])].filter(i=>i&&i!=="gps");
+  const rows=ids.map(id=>{const L_=standLog(id);const lab=(LEASE?.stands||[]).find(s=>s.id===id);const label=lab?`${lab.id} ${lab.name}`:(SITS.find(s=>s.stand===id)?.label||id);
+    let best="";const by={};L_.mine.filter(s=>s.windDir!=="").forEach(s=>{const k=sector(s.windDir);(by[k]=by[k]||[]).push(deer(s))});
+    const cand=Object.entries(by).filter(([k,v])=>v.length>=2).map(([k,v])=>[k,v.reduce((a,b)=>a+b,0)/v.length]).sort((a,b)=>b[1]-a[1])[0];
+    if(cand) best=` · best on ${SECT[cand[0]]} wind`;
+    return {id,label,L_,best}}).filter(r=>r.L_.n).sort((a,b)=>b.L_.avg-a.L_.avg);
+  if(!SITS.length) st.innerHTML='<div class="note">No sits logged yet. After a few sits per stand, the hunt plan starts favoring the stands where the club actually sees deer.</div>';
+  else rows.forEach(r=>{const el=document.createElement("div");el.className="prow";el.innerHTML=`<div class="picon" style="background:var(--stand)">${esc(String(r.id).replace("pin:","P").replace("Old ","").slice(0,3))}</div><div style="min-width:0"><div class="t">${esc(r.label)}</div><div class="m">${r.L_.n} sits · ${r.L_.avg.toFixed(1)} deer/sit · ${r.L_.bucks} bucks${r.best}</div></div><div></div>`;st.appendChild(el)});
+  // harvest totals
+  const now=new Date(), sy=now.getMonth()>=6?now.getFullYear():now.getFullYear()-1, since=`${sy}-07-01`;
+  const season=HARV.filter(h=>String(h.date)>=since);
+  const cnt=f=>season.filter(f).length;
+  $$("harvTotals").innerHTML=[["Bucks",cnt(h=>h.species==="Deer"&&h.sex==="Buck")],["Does",cnt(h=>h.species==="Deer"&&h.sex==="Doe")],["Turkeys",cnt(h=>h.species==="Turkey")],["Hogs",cnt(h=>h.species==="Hog")],["Ducks",cnt(h=>h.species==="Duck")]]
+    .map(([k,v])=>`<div class="fact"><span class="k">${k}</span><span class="v">${v}</span></div>`).join("");
+  const hl=$$("harvList"); hl.innerHTML="";
+  HARV.slice().sort((a,b)=>String(b.date).localeCompare(String(a.date))).slice(0,40).forEach(h=>{
+    const el=document.createElement("div");el.className="prow";el.style.gridTemplateColumns="30px 1fr";
+    const src=h._photo||(h.photoId?`https://drive.google.com/thumbnail?id=${encodeURIComponent(h.photoId)}&sz=w800`:"");
+    el.innerHTML=`<div class="harv-ic">${esc((h.species||"?")[0])}</div><div style="min-width:0"><div class="t">${esc(h.name)} · ${esc(h.species)}${h.sex?" "+esc(h.sex):""}${h.points?` · ${esc(h.points)} pt`:""}${h.weight?` · ${esc(h.weight)} lb`:""}</div><div class="m">${esc(h.date)}${h.stand?" · "+esc(h.stand):""}${h._pending?" · waiting for signal":""}</div>${h.notes?`<div style="font-size:13px">${esc(h.notes)}</div>`:""}${src?`<img class="thumb" src="${src}" alt="Harvest photo" loading="lazy">`:""}<div class="mini"></div></div>`;
+    if(canEdit(h)){const x=document.createElement("button");x.className="btn danger";x.textContent="Delete";x.onclick=()=>{if(x.dataset.sure){HARV=HARV.filter(v=>v.id!==h.id);enqueue({action:"deleteHarvest",id:h.id})}else{x.dataset.sure=1;x.textContent="Tap again to delete"}};el.querySelector(".mini").appendChild(x)}
+    hl.appendChild(el)});
+  if(!HARV.length) hl.innerHTML='<div class="note">No harvests logged yet.</div>';
+  // sits
+  const sl=$$("sitList"); sl.innerHTML="";
+  SITS.slice().sort((a,b)=>String(b.start).localeCompare(String(a.start))).slice(0,30).forEach(s=>{
+    const el=document.createElement("div");el.className="prow";
+    el.innerHTML=`<div class="picon" style="background:#5b6b4e">${deer(s)}</div><div style="min-width:0"><div class="t">${esc(s.label||s.stand)} · ${esc(s.name)}</div><div class="m">${esc(s.date)} ${s.start?fmtT(new Date(s.start)):""}–${s.end?fmtT(new Date(s.end)):""} · ${+s.does||0} does, ${+s.bucks||0} bucks${s.windDir!==""&&s.windDir!=null?` · ${card(+s.windDir)} ${s.windMph} mph`:""}${s.other?" · "+esc(s.other):""}</div>${s.notes?`<div style="font-size:13px">${esc(s.notes)}</div>`:""}</div><div></div>`;
+    if(canEdit(s)){const x=document.createElement("button");x.className="btn danger";x.style.padding="6px 10px";x.textContent="Delete";x.onclick=()=>{if(x.dataset.sure)deleteSit(s.id);else{x.dataset.sure=1;x.textContent="Sure?"}};el.lastElementChild.replaceWith(x)}
+    sl.appendChild(el)});
+  if(!SITS.length) sl.innerHTML='<div class="note">Check out of a stand and the app asks how the sit went.</div>';
+}
+
+/* ---------- harvest log ---------- */
+let hSpecies="Deer", hSex="Buck", hPhoto=null;
+const SEXES={Deer:["Buck","Doe"],Turkey:["Gobbler","Jake","Hen"],Hog:["Boar","Sow"],Duck:["Drake","Hen"],Other:["—"]};
+function openHarvest(){
+  if(!ME){openSignIn();return}
+  hSpecies="Deer";hSex="Buck";hPhoto=null;
+  chips($$("harvSpecies"),Object.keys(SEXES),hSpecies,v=>{hSpecies=v;hSex=SEXES[v][0];chips($$("harvSex"),SEXES[v],hSex,x=>hSex=x)});
+  chips($$("harvSex"),SEXES.Deer,hSex,x=>hSex=x);
+  $$("harvPts").value="";$$("harvWt").value="";$$("harvDate").value=dayKey(new Date());$$("harvNotes").value="";$$("harvPhoto").value="";$$("harvPrev").hidden=true;$$("harvMsg").textContent="";
+  fillSpots($$("harvStand"),CHECKINS.find(c=>c.name===ME.name)?.stand);
+  showModal("harvModal");
+}
+$$("btnAddHarvest").onclick=openHarvest;
+$$("harvPhoto").onchange=async e=>{
+  const f=e.target.files[0]; if(!f) return; $$("harvMsg").textContent="Shrinking photo…";
+  try{
+    const img=await new Promise((res,rej)=>{const i=new Image();i.onload=()=>res(i);i.onerror=rej;i.src=URL.createObjectURL(f)});
+    const k=Math.min(1,1280/Math.max(img.width,img.height)); const c=document.createElement("canvas"); c.width=Math.round(img.width*k); c.height=Math.round(img.height*k);
+    c.getContext("2d").drawImage(img,0,0,c.width,c.height); hPhoto=c.toDataURL("image/jpeg",.78);
+    $$("harvPrev").src=hPhoto; $$("harvPrev").hidden=false; $$("harvMsg").textContent="";
+  }catch(err){$$("harvMsg").textContent="Couldn't read that photo.";hPhoto=null}
+};
+$$("harvForm").onsubmit=e=>{
+  e.preventDefault(); const sp=pickedSpot($$("harvStand"));
+  const h={id:uid(),name:ME.name,date:$$("harvDate").value,species:hSpecies,sex:hSex==="—"?"":hSex,points:$$("harvPts").value,weight:$$("harvWt").value,
+    stand:sp?sp.label:"",lat:sp?+sp.ll[0]:(me?me[0]:""),lon:sp?+sp.ll[1]:(me?me[1]:""),notes:$$("harvNotes").value.trim(),_photo:hPhoto,_pending:true};
+  HARV.unshift(h); hideModal("harvModal"); toast("Harvest logged. Congrats!");
+  const {_photo,_pending,...send}=h; enqueue(Object.assign({action:"addHarvest",photo:hPhoto?hPhoto.split(",")[1]:""},send));
+};
+function renderHarvLayer(){
+  harvLayer.clearLayers();
+  HARV.filter(h=>h.lat!==""&&h.lat!=null&&isFinite(+h.lat)).forEach(h=>{
+    const src=h._photo||(h.photoId?`https://drive.google.com/thumbnail?id=${encodeURIComponent(h.photoId)}&sz=w400`:"");
+    L.marker([+h.lat,+h.lon],{icon:L.divIcon({className:"lbl",html:`<div class="harv-ic">${esc((h.species||"?")[0])}</div>`,iconSize:[24,24],iconAnchor:[12,12]})})
+     .bindPopup(`<h4>${esc(h.species)} ${esc(h.sex||"")}</h4><div>${esc(h.name)} · ${esc(h.date)}${h.points?` · ${esc(h.points)} pt`:""}</div>${src?`<img class="thumb" src="${src}" alt="">`:""}`).addTo(harvLayer);
+  });
+}
+
+/* ---------- work list ---------- */
+let taskWhere="No spot";
+function openTask(){
+  if(!ME){openSignIn();return}
+  $$("taskTitle").value="";$$("taskNotes").value="";
+  const who=$$("taskWho"); who.innerHTML=""; ["Anyone",...MEMBERS].forEach(n=>{const o=document.createElement("option");o.value=n==="Anyone"?"":n;o.textContent=n;who.appendChild(o)});
+  taskWhere=me?"My location":"No spot";
+  const upd=()=>{const c=map.getCenter();$$("taskWhereTxt").textContent=taskWhere==="My location"?(me?`${me[0].toFixed(5)}, ${me[1].toFixed(5)}`:"No GPS yet"):taskWhere==="Map center"?`Center of the map: ${c.lat.toFixed(5)}, ${c.lng.toFixed(5)}. Move the map before opening this to pick a spot.`:"Not tied to a spot on the map."};
+  chips($$("taskWhere"),["No spot","My location","Map center"],taskWhere,v=>{taskWhere=v;upd()}); upd();
+  showModal("taskModal");
+}
+$$("btnAddTask").onclick=openTask;
+$$("taskForm").onsubmit=e=>{
+  e.preventDefault(); let ll=null;
+  if(taskWhere==="My location"&&me) ll=me; if(taskWhere==="Map center"){const c=map.getCenter();ll=[c.lat,c.lng]}
+  const t={id:uid(),title:$$("taskTitle").value.trim(),notes:$$("taskNotes").value.trim(),lat:ll?+ll[0].toFixed(6):"",lon:ll?+ll[1].toFixed(6):"",assignee:$$("taskWho").value,status:"open",by:ME.name,created:new Date().toISOString(),_pending:true};
+  if(!t.title) return; TASKS.unshift(t); hideModal("taskModal"); toast("Job added");
+  const {_pending,status,created,...send}=t; enqueue(Object.assign({action:"addTask"},send));
+};
+function setTask(id,patch){const t=TASKS.find(x=>x.id===id);if(!t)return;Object.assign(t,patch);if(patch.status==="done"){t.doneBy=ME.name;t.doneAt=new Date().toISOString()}enqueue(Object.assign({action:"updateTask",id},patch))}
+function renderTasks(){
+  const open=$$("taskOpen"), done=$$("taskDone"); open.innerHTML=""; done.innerHTML="";
+  const row=(t)=>{const el=document.createElement("div");el.className="prow";el.style.gridTemplateColumns="30px 1fr";
+    const chk=document.createElement("button");chk.className="chk"+(t.status==="done"?" on":"");chk.setAttribute("aria-label",t.status==="done"?"Mark not done":"Mark done");chk.innerHTML=t.status==="done"?"&#10003;":"";
+    chk.onclick=ev=>{ev.stopPropagation();if(!ME)return openSignIn();setTask(t.id,{status:t.status==="done"?"open":"done"});toast(t.status==="done"?"Nice work":"Reopened")};
+    const body=document.createElement("div");body.style.minWidth="0";
+    body.innerHTML=`<div class="t">${esc(t.title)}</div><div class="m">${t.status==="done"?`Done by ${esc(t.doneBy||"?")}`:t.assignee?`${esc(t.assignee)} has it`:"Nobody yet"} · added by ${esc(t.by)}${t._pending?" · waiting for signal":""}</div>${t.notes?`<div style="font-size:13px">${esc(t.notes)}</div>`:""}<div class="mini"></div>`;
+    const mini=body.querySelector(".mini");
+    if(t.status!=="done"&&ME&&t.assignee!==ME.name){const b=document.createElement("button");b.className="btn";b.textContent="I'll do it";b.onclick=()=>setTask(t.id,{assignee:ME.name});mini.appendChild(b)}
+    if(t.lat!==""&&t.lat!=null){const b=document.createElement("button");b.className="btn";b.textContent="Guide me";b.onclick=()=>guideTo(t.title,[+t.lat,+t.lon]);mini.appendChild(b)}
+    if(canEdit(t)){const b=document.createElement("button");b.className="btn danger";b.textContent="Delete";b.onclick=()=>{if(b.dataset.sure){TASKS=TASKS.filter(x=>x.id!==t.id);enqueue({action:"deleteTask",id:t.id})}else{b.dataset.sure=1;b.textContent="Tap again"}};mini.appendChild(b)}
+    el.appendChild(chk);el.appendChild(body);return el};
+  const o=TASKS.filter(t=>t.status!=="done"), d=TASKS.filter(t=>t.status==="done").sort((a,b)=>String(b.doneAt).localeCompare(String(a.doneAt)));
+  o.forEach(t=>open.appendChild(row(t))); d.forEach(t=>done.appendChild(row(t)));
+  if(!o.length) open.innerHTML='<div class="note">Nothing on the list. Add roads to cut, blinds to build, plots to plant.</div>';
+  if(!d.length) done.innerHTML='<div class="note">Nothing finished yet.</div>';
+}
+function renderTaskLayer(){
+  taskLayer.clearLayers();
+  TASKS.filter(t=>t.status!=="done"&&t.lat!==""&&t.lat!=null&&isFinite(+t.lat)).forEach(t=>{
+    L.marker([+t.lat,+t.lon],{icon:L.divIcon({className:"lbl",html:'<div class="task-ic">W</div>',iconSize:[24,24],iconAnchor:[12,12]})})
+     .bindPopup(()=>{const d=document.createElement("div");d.innerHTML=`<h4>${esc(t.title)}</h4>${t.notes?`<div>${esc(t.notes)}</div>`:""}<div class="pop-m">${t.assignee?esc(t.assignee)+" has it":"Nobody yet"}</div>`;
+       const b=document.createElement("button");b.className="btn";b.style.marginTop="8px";b.textContent="Open work list";b.onclick=()=>{map.closePopup();selectTab("work");collapse(false)};d.appendChild(b);return d}).addTo(taskLayer);
+  });
+}
+
+/* ---------- blood trail ---------- */
+let blood=null;
+const bloodLine=L.polyline([],{color:"#e03131",weight:4,interactive:false}).addTo(bloodLayer);
+function startBlood(){
+  bloodLayer.clearLayers(); bloodLine.setLatLngs([]); bloodLine.addTo(bloodLayer);
+  blood={pts:me?[me]:[],marks:[]}; $$("bloodBar").hidden=false;
+  if(!me){startCompass();startGps()} else {follow=true;updateLocateBtn();map.setView(me,Math.max(map.getZoom(),18))}
+  collapse(true); renderBlood(); toast("Blood trail started. Your path is drawn in red.");
+}
+function bloodOnPos(){
+  if(!blood||!me) return; const last=blood.pts[blood.pts.length-1];
+  if(!last||dist(last,me)>3){blood.pts.push(me);bloodLine.setLatLngs(blood.pts)} renderBlood();
+}
+function renderBlood(){
+  if(!blood) return; let len=0; for(let i=1;i<blood.pts.length;i++) len+=dist(blood.pts[i-1],blood.pts[i]);
+  $$("bloodTxt").textContent=`${blood.marks.length} blood mark${blood.marks.length===1?"":"s"} · ${yd(len)} yd tracked`;
+  const lm=blood.marks[blood.marks.length-1];
+  $$("bloodSub").textContent=lm&&me?`Last sign ${yd(dist(me,lm))} yd ${card(bearing(me,lm))}`:"Tap Blood each time you find sign";
+}
+$$("bloodMark").onclick=()=>{
+  if(!blood) return; if(!me){toast("Waiting for GPS…");return}
+  blood.marks.push(me);
+  L.circleMarker(me,{radius:7,color:"#fff",weight:2,fillColor:"#e03131",fillOpacity:1}).bindTooltip("Blood "+blood.marks.length).addTo(bloodLayer);
+  if(ME) addPin({id:uid(),t:new Date().toISOString(),lat:+me[0].toFixed(6),lon:+me[1].toFixed(6),type:"blood",note:`Blood ${blood.marks.length} · ${new Date().toLocaleTimeString("en-US",{hour:"numeric",minute:"2-digit"})}`,by:ME.name});
+  renderBlood(); toast("Blood marked");
+};
+$$("bloodBack").onclick=()=>{const lm=blood?.marks[blood.marks.length-1]; if(!lm){toast("No blood marked yet");return} guideTo("Last blood",lm)};
+$$("bloodEnd").onclick=()=>{const b=$$("bloodEnd"); if(!b.dataset.sure){b.dataset.sure=1;b.textContent="Sure?";setTimeout(()=>{b.dataset.sure="";b.textContent="End"},3000);return}
+  b.dataset.sure="";b.textContent="End"; blood=null; $$("bloodBar").hidden=true; if(navTarget?.label==="Last blood") stopNav(); toast("Blood trail ended. The red line stays until you start a new one.")};
+$$("btnBlood").onclick=startBlood;
+
+/* ---------- measure ---------- */
+let meas=null;
+const measLine=L.polyline([],{color:"#ffd34d",weight:3,dashArray:"6 6",interactive:false});
+const measPoly=L.polygon([],{color:"#ffd34d",weight:1,fillOpacity:.15,interactive:false});
+function startMeasure(){meas=[];measLayer.clearLayers();measLine.addTo(measLayer);measPoly.addTo(measLayer);$$("measureBar").hidden=false;map.on("click",onMeasClick);collapse(true);renderMeas();toast("Tap the map to add points")}
+function onMeasClick(e){meas.push([e.latlng.lat,e.latlng.lng]);renderMeas()}
+function renderMeas(){
+  if(!meas) return; measLine.setLatLngs(meas); measPoly.setLatLngs(meas.length>=3?meas:[]);
+  measLayer.eachLayer(l=>{if(l instanceof L.CircleMarker&&!(l instanceof L.Circle)) measLayer.removeLayer(l)});
+  meas.forEach(p=>L.circleMarker(p,{radius:5,color:"#000",weight:1,fillColor:"#ffd34d",fillOpacity:1,interactive:false}).addTo(measLayer));
+  let len=0; for(let i=1;i<meas.length;i++) len+=dist(meas[i-1],meas[i]);
+  let area=0; if(meas.length>=3){const la0=meas[0][0]*Math.PI/180;const xy=meas.map(p=>[p[1]*111320*Math.cos(la0),p[0]*110540]);for(let i=0;i<xy.length;i++){const a=xy[i],b=xy[(i+1)%xy.length];area+=a[0]*b[1]-b[0]*a[1]}area=Math.abs(area)/2}
+  $$("measTxt").textContent=meas.length<2?"Tap the map to add points":`${yd(len).toLocaleString()} yd${len<300?` (${Math.round(len*3.28084)} ft)`:""}`;
+  $$("measSub").textContent=meas.length>=3?`Area: ${(area/4046.86).toFixed(2)} acres`:meas.length===2?"Add a third point for area":"2 points for distance, 3 or more for area";
+}
+$$("measUndo").onclick=()=>{if(meas){meas.pop();renderMeas()}};
+$$("measDone").onclick=()=>{meas=null;map.off("click",onMeasClick);measLayer.clearLayers();$$("measureBar").hidden=true};
+$$("btnMeasure").onclick=startMeasure;
+
+/* ---------- floating bars stack under the top chips ---------- */
+function placeBars(){
+  let y=document.querySelector(".top").getBoundingClientRect().bottom+8;
+  ["navBar","bloodBar","measureBar"].forEach(id=>{const el=$$(id); if(!el.hidden){el.style.top=y+"px"; y+=el.offsetHeight+8}});
+}
+new MutationObserver(placeBars).observe(document.body,{subtree:true,attributes:true,attributeFilter:["hidden"]});
+addEventListener("resize",placeBars);
+
+
+/* ---------- share my location ---------- */
+let shareOn=S.get("share",false), shareStart=S.get("shareStart",0), lastSent=null, lastSentAt=0;
+const SHARE_HOURS=8;
+async function postNow(body){ try{ await api("POST",body); return true }catch(e){ return false } }
+function shareTick(c){
+  if(!shareOn||!ME||!me) return;
+  if(Date.now()-shareStart>SHARE_HOURS*3600e3){ setShare(false); toast(`Location sharing turned off after ${SHARE_HOURS} hours`); return }
+  const moved=!lastSent||dist(lastSent,me)>10, stale=Date.now()-lastSentAt>120e3, soon=Date.now()-lastSentAt>20e3;
+  if(moved&&!soon){ clearTimeout(window._shareRetry); window._shareRetry=setTimeout(()=>shareTick(c),20e3-(Date.now()-lastSentAt)+200); return }
+  if(soon&&(moved||stale)&&navigator.onLine!==false){
+    lastSent=me; lastSentAt=Date.now();
+    postNow({action:"shareLoc",lat:+me[0].toFixed(6),lon:+me[1].toFixed(6),acc:Math.round(c?.accuracy||0),heading:lastHeading!=null?Math.round(lastHeading):""}).then(ok=>{renderShare(ok?"":"No signal right now. Your dot updates when you get a bar.")});
+  }
+}
+function setShare(on){
+  if(on&&!ME){openSignIn();$$("shareToggle").checked=false;return}
+  shareOn=on; S.set("share",on);
+  if(on){ shareStart=Date.now(); S.set("shareStart",shareStart); lastSent=null; lastSentAt=0; startCompass(); startGps(); if(me) shareTick(); toast("Sharing your location with the club"); }
+  else { postNow({action:"stopShare"}); toast("Stopped sharing your location"); }
+  renderShare(); resetSyncTimer();
+}
+function renderShare(warn){
+  $$("shareToggle").checked=shareOn;
+  $$("shareTxt").textContent=!shareOn?"Off. Only you see your dot.":
+    warn||`On. The club sees your dot while this app is open on your screen. Turns off by itself at ${new Date(shareStart+SHARE_HOURS*3600e3).toLocaleTimeString("en-US",{hour:"numeric",minute:"2-digit"})}.`;
+}
+$$("shareToggle").onchange=e=>setShare(e.target.checked);
+function ago(iso){const m=Math.round((Date.now()-Date.parse(iso))/60000);return m<1?"just now":m===1?"1 min ago":`${m} min ago`}
+function renderMates(){
+  mateLayer.clearLayers();
+  const box=$$("sharers"); box.innerHTML="";
+  LOCS.forEach(l=>{
+    const old=Date.now()-Date.parse(l.at)>3*60e3;
+    L.marker([+l.lat,+l.lon],{icon:L.divIcon({className:"lbl",html:`<div class="mate${old?" old":""}"><b></b><span>${esc(l.name)}</span></div>`,iconSize:[0,0]}),zIndexOffset:950})
+      .bindPopup(()=>{const d=document.createElement("div");d.innerHTML=`<h4>${esc(l.name)}</h4><div class="pop-m">Updated ${ago(l.at)}${me?` · ${yd(dist(me,[+l.lat,+l.lon]))} yd ${card(bearing(me,[+l.lat,+l.lon]))} of you`:""}</div>`;
+        const g=document.createElement("button");g.className="btn";g.style.marginTop="8px";g.textContent="Guide me to "+l.name;g.onclick=()=>{map.closePopup();guideTo(l.name,[+l.lat,+l.lon])};d.appendChild(g);return d}).addTo(mateLayer);
+    const r=document.createElement("div");r.className="prow";
+    r.innerHTML=`<div class="picon" style="background:#2bb5a0">${esc(l.name.slice(0,2))}</div><div style="min-width:0"><div class="t">${esc(l.name)} is sharing</div><div class="m">Updated ${ago(l.at)}</div></div><div class="m">${me?yd(dist(me,[+l.lat,+l.lon]))+" yd":""}</div>`;
+    r.onclick=()=>{map.setView([+l.lat,+l.lon],18);collapse(true)}; box.appendChild(r);
+  });
+}
+let syncTimer=null;
+function resetSyncTimer(){ clearInterval(syncTimer); syncTimer=setInterval(()=>{if(document.visibilityState==="visible")sync()},(shareOn||LOCS.length)?20000:45000) }
+
+/* ---------- boot ---------- */
+function renderAll(){renderChips();renderPlan();drawCones();renderPins();renderLayers();renderHunters();renderClubData();renderLight()}
+buildLease(true);
+renderAll();
+loadWeather();
+if(cfg.code) sync(); else openSignIn();
+resetSyncTimer();
+renderShare(); if(shareOn&&cfg.code){ if(Date.now()-shareStart>SHARE_HOURS*3600e3) setShare(false); else { startGps(); } }
+setInterval(()=>{renderMates();if(shareOn)shareTick()},30000);
+setInterval(renderHunters,60000);
+setInterval(renderLight,30000);
+setInterval(()=>{if(WX&&Date.now()-WX._at>3*3600e3)loadWeather();renderChips();drawCones()},10*60000);
+document.addEventListener("visibilitychange",()=>{if(document.visibilityState==="visible"){sync();if(!WX||Date.now()-WX._at>3600e3)loadWeather()}});
+window.addEventListener("online",sync);
+</script>
+</body>
+</html>
