@@ -1,0 +1,5 @@
+backend/
+.clasp.json
+.clasprc.json
+node_modules/
+.DS_Store
