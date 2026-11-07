@@ -779,7 +779,7 @@ function renderConeBar(){
 document.getElementById("coneHr").oninput=e=>{const {a}=coneRange(); coneT=new Date(+a+e.target.value*3600e3); drawCones()};
 document.getElementById("coneNow").onclick=()=>{coneT=null; if(selDay!==0){selDay=0; renderPlan()} drawCones()};
 function drawCones(){
-  coneLayer.clearLayers(); renderConeBar(); if(!WX||!LEASE) return;
+  coneLayer.clearLayers(); renderConeBar(); if(!WX||!LEASE||!map.hasLayer(standLayer)) return;  // cones belong to the stands: hidden when Stands is off
   const i=wxIndex(coneTime()); if(i<0) return;
   const dir=WX.hourly.wind_direction_10m[i]; const to=(dir+180)%360;
   LEASE.stands.forEach(s=>{
@@ -1136,6 +1136,7 @@ function renderLegend(){
   lg.innerHTML=h; lg.hidden=!h;
 }
 map.on("layeradd layerremove",renderLegend);
+standLayer.on("add remove",()=>drawCones());
 // USGS servers drop the odd tile; retry each failed tile twice
 [ov["Elevation (high / low)"],ov[SLOPE],ov["10 ft contours"],bases["LiDAR terrain"]].forEach(l=>l.on("tileerror",e=>{const n=(e.tile._tries||0)+1;if(n>2)return;e.tile._tries=n;const src=e.tile.src;setTimeout(()=>{e.tile.src=src+(src.includes("?")?"&":"?")+"retry="+n},700*n)}));
 
