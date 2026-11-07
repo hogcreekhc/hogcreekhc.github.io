@@ -463,7 +463,7 @@ input[type=range]{padding:0;accent-color:var(--accent)}
     <label class="f">Midday: <b id="stMidV"></b><input type="range" min="0" max="10" id="stMid"></label>
     <label class="f">Midday during the rut: <b id="stRutV"></b><input type="range" min="0" max="10" id="stRut"></label>
     <label class="sharebox"><input type="checkbox" id="stKids"><span><b>Kid friendly</b></span></label>
-    <label class="f">Why it's good<textarea id="stWhy" rows="2" maxlength="300" placeholder="Over the scrape line, 40 yd off the blowdown"></textarea></label>
+    <label class="f">Why it's good<textarea id="stWhy" rows="2" maxlength="300" placeholder="Over the scrape line, 40 yd off the creek"></textarea></label>
     <label class="f">How to walk in<textarea id="stWalk" rows="2" maxlength="300" placeholder="End of main road, then 150 m west"></textarea></label>
     <div class="status" id="stMsg"></div>
     <div class="row"><button class="btn primary" type="submit">Save stand</button><button class="btn" type="button" data-close>Cancel</button><button class="btn danger" type="button" id="stDelete">Delete stand</button></div>
@@ -478,7 +478,8 @@ input[type=range]{padding:0;accent-color:var(--accent)}
 <script>
 let LEASE = null;
 const RR_ELEV='{"rasterFunction":"Colormap","rasterFunctionArguments":{"Colormap":[[1,44,123,182],[2,0,166,202],[3,0,204,188],[4,144,235,157],[5,255,255,140],[6,249,141,89],[7,215,25,28]],"Raster":{"rasterFunction":"Remap","rasterFunctionArguments":{"InputRanges":[0.0,120.4,120.4,124.97,124.97,129.54,129.54,134.11,134.11,138.68,138.68,143.26,143.26,3047.7],"OutputValues":[1,2,3,4,5,6,7]}}}}';
-const RR_SLOPE='{"rasterFunction":"Colormap","rasterFunctionArguments":{"Colormap":[[1,46,125,50],[2,139,195,74],[3,253,216,53],[4,245,124,0],[5,183,28,28]],"Raster":{"rasterFunction":"Remap","rasterFunctionArguments":{"InputRanges":[0,5,5,10,10,15,15,22,22,90],"OutputValues":[1,2,3,4,5],"Raster":{"rasterFunction":"Slope Degrees"}}}}}';
+const RR_SLOPE='{"rasterFunction":"Colormap","rasterFunctionArguments":{"Colormap":[[1,46,160,67],[2,253,216,53],[3,229,57,53]],"Raster":{"rasterFunction":"Remap","rasterFunctionArguments":{"InputRanges":[0,8,8,15,15,90],"OutputValues":[1,2,3],"Raster":{"rasterFunction":"Slope Degrees"}}}}}';
+const SLOPE="Slope (green / yellow / red)";
 const PIN_TYPES = [
   {k:"stand",  name:"Deer stand", c:"#1f8a4c", g:"DS"},
   {k:"scrape", name:"Scrape",     c:"#ff3b8b", g:"Sc"},
@@ -525,10 +526,10 @@ bases[baseName].addTo(map);
 
 const ov={};
 ov["Elevation (high / low)"]=new ExportTiles(IMG+encodeURIComponent(RR_ELEV),{opacity:.5,maxZoom:20,maxNativeZoom:17,zIndex:2,attribution:"USGS 3DEP"});
-ov["Slope (flat / steep)"]=new ExportTiles(IMG+encodeURIComponent(RR_SLOPE),{opacity:.5,maxZoom:20,maxNativeZoom:17,zIndex:3,attribution:"USGS 3DEP"});
+ov[SLOPE]=new ExportTiles(IMG+encodeURIComponent(RR_SLOPE),{opacity:.5,maxZoom:20,maxNativeZoom:17,zIndex:3,attribution:"USGS 3DEP"});
 ov["10 ft contours"]=new WMSTiles(WMS("3DEPElevation:Preset 10ft Contour Interval"),{maxZoom:20,maxNativeZoom:17,opacity:.85,zIndex:4,attribution:"USGS 3DEP"});
 ov["Boundary"]=L.layerGroup();
-ov["Blowdown & scrape line"]=L.layerGroup();
+ov["Scrape line"]=L.layerGroup();
 ov["Roads"]=L.layerGroup();
 ov["Camp"]=L.layerGroup();
 ov["Neighbor lines"]=L.layerGroup();
@@ -543,8 +544,8 @@ const mateLayer=L.layerGroup(); ov["Members sharing location"]=mateLayer;
 const taskLayer=L.layerGroup(); ov["Work list"]=taskLayer;
 const harvLayer=L.layerGroup(); ov["Harvests"]=harvLayer;
 const navLayer=L.layerGroup().addTo(map), measLayer=L.layerGroup().addTo(map), bloodLayer=L.layerGroup().addTo(map);
-const defaultsOn=["Public land (WMA)","Neighbor lines","Members sharing location","Work list","Harvests","Hunters","10 ft contours","Boundary","Blowdown & scrape line","Roads","Camp","Stands","Club pins","Scent cones","My track"];
-const ovOn=S.get("ov",defaultsOn);
+const defaultsOn=["Public land (WMA)","Neighbor lines","Members sharing location","Work list","Harvests","Hunters","10 ft contours","Boundary","Scrape line","Roads","Camp","Stands","Club pins","Scent cones","My track"];
+const ovOn=S.get("ov",defaultsOn).map(n=>({"Blowdown & scrape line":"Scrape line","Slope (flat / steep)":SLOPE})[n]||n);
 Object.entries(ov).forEach(([n,l])=>{if(ovOn.includes(n)) l.addTo(map)});
 function fitLease(){if(!LEASE)return;const h=document.body.classList.contains("min")?70:Math.round(innerHeight*.44)+10;map.fitBounds(leaseBounds(),{paddingTopLeft:[20,110],paddingBottomRight:[70,h]})}
 // All of the club's properties. Older backends only sent one boundary.
@@ -552,7 +553,7 @@ function props(){if(!LEASE)return[];return (LEASE.properties&&LEASE.properties.l
 function leaseBounds(){const b=L.latLngBounds([]);props().forEach(p=>p.boundary.forEach(q=>b.extend(q)));return b}
 const standMarkers={}, propPolys={};
 function buildLease(fit){
-  ["Boundary","Blowdown & scrape line","Roads","Camp","Neighbor lines","Public land (WMA)"].forEach(k=>ov[k].clearLayers());
+  ["Boundary","Scrape line","Roads","Camp","Neighbor lines","Public land (WMA)"].forEach(k=>ov[k].clearLayers());
   standLayer.clearLayers(); oldLayer.clearLayers();
   if(!LEASE) return;
   props().forEach(p=>{
@@ -563,8 +564,7 @@ function buildLease(fit){
     (LEASE.neighbors.public||[]).forEach(p=>L.polygon(p.poly,{color:"#3fbf5f",weight:2,dashArray:"4 4",fillColor:"#3fbf5f",fillOpacity:.18}).bindPopup(`<h4>${esc(p.name)}</h4>Public hunting land (USFS). On WMA hunt days, pressure here can push deer onto the lease.`).addTo(ov["Public land (WMA)"]));
     LEASE.neighbors.labels.forEach(n=>L.marker(n.ll,{icon:L.divIcon({className:"lbl",html:`<div class="nb-lbl" style="transform:translate(${n.align==="end"?"-100%":n.align==="start"?"0":"-50%"},-50%)">${esc(n.name)}</div>`,iconSize:[0,0]}),interactive:false}).addTo(ov["Neighbor lines"]));
   }
-  if(LEASE.blowdown) L.polygon(LEASE.blowdown,{color:"#fff",weight:2,dashArray:"6 5",fillColor:"#fff",fillOpacity:.12}).bindPopup("<h4>Tornado blowdown</h4>About 13 ac of downed timber. Sanctuary: hunt the edges, don't go in.").addTo(ov["Blowdown & scrape line"]);
-  if(LEASE.scrape) L.polyline(LEASE.scrape,{color:"#ff3b8b",weight:5,dashArray:"2 9",lineCap:"round"}).bindPopup("<h4>Scrape & rub line</h4>On the rise between the pines and hardwoods.").addTo(ov["Blowdown & scrape line"]);
+  if(LEASE.scrape) L.polyline(LEASE.scrape,{color:"#ff3b8b",weight:5,dashArray:"2 9",lineCap:"round"}).bindPopup("<h4>Scrape & rub line</h4>On the rise between the pines and hardwoods.").addTo(ov["Scrape line"]);
   if(LEASE.mainRoad){L.polyline(LEASE.mainRoad,{color:"#000",weight:8,opacity:.45}).addTo(ov["Roads"]);L.polyline(LEASE.mainRoad,{color:"#fff",weight:4}).bindPopup("<h4>Main road</h4>Existing, good shape.").addTo(ov["Roads"])}
   if(LEASE.newRoad){L.polyline(LEASE.newRoad,{color:"#000",weight:8,opacity:.45}).addTo(ov["Roads"]);L.polyline(LEASE.newRoad,{color:"#ffd34d",weight:4,dashArray:"10 7"}).bindPopup("<h4>SE line road</h4>Proposed reopen. Needs Weyerhaeuser forester approval first; no cutting commercial trees.").addTo(ov["Roads"])}
   if(LEASE.camp) L.marker(LEASE.camp,{icon:L.divIcon({className:"lbl",html:'<div class="camp-ic">C</div>',iconSize:[30,30],iconAnchor:[15,15]})}).bindPopup("<h4>Camp</h4>In the pines, about 130 m off the road.").addTo(ov["Camp"]);
@@ -1097,12 +1097,12 @@ $("btnSave").onclick=()=>{cfg.url=$("setUrl").value.trim()||CLUB.SHEET_URL;cfg.r
 function renderLegend(){
   const lg=document.getElementById("legend"); let h="";
   if(map.hasLayer(ov["Elevation (high / low)"])) h+=`<div class="bar">Low<span>${["#2c7bb6","#00a6ca","#00ccbc","#90eb9d","#ffff8c","#f98d59","#d7191c"].map(c=>`<i style="background:${c}"></i>`).join("")}</span>High</div><div style="color:var(--muted)">395 · 410 · 425 · 440 · 455 · 470 ft</div>`;
-  if(map.hasLayer(ov["Slope (flat / steep)"])) h+=`<div class="bar">Flat<span>${["#2e7d32","#8bc34a","#fdd835","#f57c00","#b71c1c"].map(c=>`<i style="background:${c}"></i>`).join("")}</span>Steep</div>`;
+  if(map.hasLayer(ov[SLOPE])) h+=`<div class="bar">Flat<span>${["#2ea043","#fdd835","#e53935"].map(c=>`<i style="background:${c}"></i>`).join("")}</span>Steep</div><div style="color:var(--muted)">green under 8° · yellow 8–15° · red over 15°</div>`;
   lg.innerHTML=h; lg.hidden=!h;
 }
 map.on("layeradd layerremove",renderLegend);
 // USGS servers drop the odd tile; retry each failed tile twice
-[ov["Elevation (high / low)"],ov["Slope (flat / steep)"],ov["10 ft contours"],bases["LiDAR terrain"]].forEach(l=>l.on("tileerror",e=>{const n=(e.tile._tries||0)+1;if(n>2)return;e.tile._tries=n;const src=e.tile.src;setTimeout(()=>{e.tile.src=src+(src.includes("?")?"&":"?")+"retry="+n},700*n)}));
+[ov["Elevation (high / low)"],ov[SLOPE],ov["10 ft contours"],bases["LiDAR terrain"]].forEach(l=>l.on("tileerror",e=>{const n=(e.tile._tries||0)+1;if(n>2)return;e.tile._tries=n;const src=e.tile.src;setTimeout(()=>{e.tile.src=src+(src.includes("?")?"&":"?")+"retry="+n},700*n)}));
 
 /* ---------- offline ---------- */
 if("serviceWorker" in navigator && /^https?:$/.test(location.protocol)) navigator.serviceWorker.register("sw.js").catch(()=>{});
@@ -1116,7 +1116,7 @@ async function saveOffline(){
   if(!("caches" in window)){st.textContent="This browser can't save maps.";return}
   btn.disabled=true;
   const b=leaseBounds().pad(0.15);
-  const layers=[bases["Aerial"],ov["10 ft contours"],ov["Elevation (high / low)"],ov["Slope (flat / steep)"],bases["LiDAR terrain"],bases["Topo"]];
+  const layers=[bases["Aerial"],ov["10 ft contours"],ov["Elevation (high / low)"],ov[SLOPE],bases["LiDAR terrain"],bases["Topo"]];
   const jobs=[]; for(let z=13;z<=18;z++) for(const c of tilesFor(b,z)) for(const l of layers){ const nz=l.options.maxNativeZoom||18; if(z>nz) continue; jobs.push(l.getTileUrl(c)); }
   const cache=await caches.open("hc-tiles-v1"); let done=0, fail=0, i=0;
   async function worker(){ while(i<jobs.length){ const u=jobs[i++]; try{ if(!(await cache.match(u))){ const r=await fetch(u,{mode:"cors"}); if(r.ok) await cache.put(u,r); else fail++; } }catch(e){fail++} done++; if(done%10===0||done===jobs.length) st.textContent=`Saving map… ${Math.round(done/jobs.length*100)}%`; } }
@@ -1602,7 +1602,7 @@ function startEdit(p){
   $$("edSpacing").value=ED.spacing; $$("edAcc").value=ED.maxAcc;
   if(p&&propPolys[p.id]) propPolys[p.id].setStyle({opacity:.25,fillOpacity:0});
   // taps on lines and areas add points instead of opening popups (stopEdit rebuilds them)
-  ["Boundary","Blowdown & scrape line","Roads","Neighbor lines","Public land (WMA)"].forEach(k=>ov[k].eachLayer(l=>l.unbindPopup&&l.unbindPopup()));
+  ["Boundary","Scrape line","Roads","Neighbor lines","Public land (WMA)"].forEach(k=>ov[k].eachLayer(l=>l.unbindPopup&&l.unbindPopup()));
   map.closePopup(); map.on("click",edClick); $$("editBar").hidden=false; collapse(true);
   setTimeout(()=>{ if(p) map.fitBounds(L.polygon(p.boundary).getBounds(),{padding:[30,30]}); },260);
   renderEd();
