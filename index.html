@@ -188,8 +188,13 @@ label.f{display:grid;gap:4px;font:500 12px var(--mono);color:var(--muted);text-t
 .winds button{padding:7px 0;border:1px solid var(--line);background:var(--panel2);border-radius:8px;font:600 12px var(--mono);cursor:pointer}
 .winds button[aria-pressed="true"]{background:#1f5c38;border-color:var(--good)}
 input[type=range]{padding:0;accent-color:var(--accent)}
-.conebar{margin:2px 0 10px}.conebar .ct{display:flex;align-items:center;justify-content:space-between;gap:8px;font-size:14px;margin-bottom:2px}
-.conebar input{width:100%}.conebar .btn.sm{padding:4px 12px;font-size:13px;width:auto;margin:0}
+.conebar{margin:2px 0 10px;min-width:0;max-width:100%}.conebar .ct{display:flex;align-items:center;justify-content:space-between;gap:8px;font-size:14px;margin-bottom:2px}
+.conebar input{width:100%}
+.cstrip{display:flex;width:100%;min-width:0;gap:4px;overflow-x:auto;padding:4px 0 6px;scrollbar-width:none}.cstrip::-webkit-scrollbar{display:none}
+.cstrip button{flex:none;width:52px;margin:0;padding:5px 0;border:1px solid transparent;border-radius:9px;background:var(--panel2);color:inherit;font:inherit;font-size:11px;line-height:1.25;display:grid;justify-items:center;gap:1px;cursor:pointer}
+.cstrip button[aria-pressed=true]{border-color:var(--accent);background:rgba(255,122,61,.18)}
+.cstrip button.shift{box-shadow:inset 3px 0 0 var(--ok)}
+.cstrip .hd{color:var(--muted)}.conebar .btn.sm{padding:4px 12px;font-size:13px;width:auto;margin:0}
 </style>
 </head>
 <body>
@@ -227,7 +232,7 @@ input[type=range]{padding:0;accent-color:var(--accent)}
   <div class="body">
     <section class="pane on" id="p-today">
       <div class="days" id="days"></div>
-      <div class="conebar" id="coneBar"><div class="ct"><span id="coneTxt">Scent cones</span><button class="btn sm" id="coneNow" type="button">Now</button></div><input type="range" id="coneHr" min="0" max="12" step="1" aria-label="Hour for scent cones"></div>
+      <div class="conebar" id="coneBar"><div class="ct"><span id="coneTxt">Scent cones</span><button class="btn sm" id="coneNow" type="button">Now</button></div><div class="cstrip" id="coneStrip"></div><input type="range" id="coneHr" min="0" max="12" step="1" aria-label="Hour for scent cones"></div>
       <div class="facts" id="facts"></div>
       <div class="sec">Best stands</div>
       <div id="picks" style="display:grid;gap:8px"></div>
@@ -768,19 +773,38 @@ function renderChips(){
 // Hour the scent cones show. null = default: now for today, 2 h before sunset on other days.
 let coneT=null;
 function coneTime(){ if(coneT) return coneT; if(selDay===0) return new Date(); const s=sunFor(dayDate(selDay)); return new Date(+s.set-2*3600e3) }
-function coneRange(){ // whole hours from an hour before sunrise to an hour after sunset
+// Today: now and the next 24 hours (no past hours). Other days: an hour before sunrise to an hour after sunset.
+function coneRange(){
+  if(selDay===0){ const a=new Date(); a.setMinutes(0,0,0); return {a,n:24,today:true} }
   const s=sunFor(dayDate(selDay)); const a=new Date(+s.rise-3600e3); a.setMinutes(0,0,0);
-  const n=Math.ceil((+s.set+3600e3-a)/3600e3); return {a,n};
+  return {a,n:Math.ceil((+s.set+3600e3-a)/3600e3),today:false};
 }
 const hrTxt=t=>t.toLocaleTimeString("en-US",{timeZone:CLUB.TZ,hour:"numeric"});
+const dayKeyTZ=t=>t.toLocaleDateString("en-US",{timeZone:CLUB.TZ});
+const hrDayTxt=t=>(dayKeyTZ(t)===dayKeyTZ(new Date())?"":t.toLocaleDateString("en-US",{timeZone:CLUB.TZ,weekday:"short"})+" ")+hrTxt(t);
+const coneAt=(a,v,today)=>v===0&&today?null:new Date(+a+v*3600e3);
+function setConeHr(v){ const {a,today}=coneRange(); coneT=coneAt(a,v,today); drawCones() }
 function renderConeBar(){
-  const sl=document.getElementById("coneHr"), t=coneTime(), {a,n}=coneRange();
-  sl.max=n; sl.value=Math.max(0,Math.min(n,Math.round((+t-a)/3600e3)));
-  const i=WX?wxIndex(t):-1, live=!coneT&&selDay===0;
-  document.getElementById("coneTxt").innerHTML=`Scent cones · <b>${live?"now":hrTxt(t)}</b>${i>=0?` · ${card(WX.hourly.wind_direction_10m[i])} ${Math.round(WX.hourly.wind_speed_10m[i])} mph`:""}`;
+  const sl=document.getElementById("coneHr"), t=coneTime(), {a,n,today}=coneRange();
+  const live=!coneT&&selDay===0, sel=live?0:Math.max(0,Math.min(n,Math.round((+t-a)/3600e3)));
+  sl.max=n; sl.value=sel;
+  const i=WX?wxIndex(t):-1;
+  document.getElementById("coneTxt").innerHTML=`Scent cones · <b>${live?"now":hrDayTxt(t)}</b>${i>=0?` · ${card(WX.hourly.wind_direction_10m[i])} ${Math.round(WX.hourly.wind_speed_10m[i])} mph`:""}`;
   document.getElementById("coneNow").hidden=live;
+  // hour-by-hour wind; a yellow edge marks an hour where the wind swings 45° or more
+  const st=document.getElementById("coneStrip"); st.innerHTML=""; let prev=null;
+  for(let v=0;v<=n;v++){
+    const h=new Date(+a+v*3600e3), j=WX?wxIndex(v===0&&today?new Date():h):-1, b=document.createElement("button");
+    b.type="button"; b.setAttribute("aria-pressed",v===sel);
+    if(j<0){ b.innerHTML=`<span class="hd">${v===0&&today?"Now":hrTxt(h)}</span><span>–</span>`; }
+    else{ const d=WX.hourly.wind_direction_10m[j], sp=Math.round(WX.hourly.wind_speed_10m[j]);
+      if(prev!=null&&Math.abs(((d-prev+540)%360)-180)>=45) b.classList.add("shift"); prev=d;
+      b.innerHTML=`<span class="hd">${v===0&&today?"Now":hrTxt(h)}</span>${arrowSvg(d,18)}<span>${card(d)} ${sp}</span>`; }
+    b.onclick=()=>setConeHr(v); st.appendChild(b);
+  }
+  const on=st.children[sel]; if(on) st.scrollLeft=Math.max(0,on.offsetLeft-st.offsetLeft-st.clientWidth/2+on.offsetWidth/2);
 }
-document.getElementById("coneHr").oninput=e=>{const {a}=coneRange(); coneT=new Date(+a+e.target.value*3600e3); drawCones()};
+document.getElementById("coneHr").oninput=e=>setConeHr(+e.target.value);
 document.getElementById("coneNow").onclick=()=>{coneT=null; if(selDay!==0){selDay=0; renderPlan()} drawCones()};
 function drawCones(){
   // Cones belong to what they come from: club stands (hidden when Stands is off) and dropped
