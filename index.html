@@ -227,7 +227,8 @@ input[type=range]{padding:0;accent-color:var(--accent)}
     </section>
 
     <section class="pane" id="p-out">
-      <label class="sharebox"><input type="checkbox" id="shareToggle"><span><b>Share my location with the club</b><br><span class="note" id="shareTxt">Off. Only you see your dot.</span></span></label>
+      <label class="sharebox"><input type="checkbox" id="autoShareToggle"><span><b>Share my location while I'm on the property</b><br><span class="note" id="autoShareTxt"></span></span></label>
+      <label class="sharebox"><input type="checkbox" id="shareToggle"><span><b>Share everywhere for 8 hours</b><br><span class="note" id="shareTxt">Off. Only you see your dot.</span></span></label>
       <div class="plist" id="sharers"></div>
       <div id="myCheck"></div>
       <div class="sec">In the woods now</div>
@@ -801,7 +802,13 @@ function startGps(){
   watchId=navigator.geolocation.watchPosition(onPos,err=>{
     document.getElementById("gpsTxt").textContent=err.code===1?"Location blocked":"No GPS fix";
     toast(err.code===1?"Allow location for this site in Settings":"Still looking for GPS…");
-  },{enableHighAccuracy:true,maximumAge:5000,timeout:30000});
+  },GPS_OPTS);
+}
+const GPS_OPTS={enableHighAccuracy:true,maximumAge:5000,timeout:30000};
+// start GPS without moving the map (used for sharing on the property)
+function startGpsQuiet(){
+  if(watchId!=null||!("geolocation" in navigator)) return;
+  watchId=navigator.geolocation.watchPosition(onPos,err=>{document.getElementById("gpsTxt").textContent=err.code===1?"Location blocked":"No GPS fix"},GPS_OPTS);
 }
 function updateLocateBtn(){document.getElementById("btnLocate").classList.toggle("on",follow)}
 function onPos(p){
@@ -815,7 +822,7 @@ function onPos(p){
   const inside=props().some(p=>inPoly(me,p.boundary));
   document.getElementById("gpsDot").classList.add("on");
   let near=null,nd=1e9; (LEASE.stands||[]).forEach(s=>{const d=dist(me,s.ll);if(d<nd){nd=d;near=s}});
-  document.getElementById("gpsTxt").textContent=`${inside?"On lease":"Off lease"}${near?` · ${near.id} ${yd(nd)} yd ${card(bearing(me,near.ll))}`:""}`;
+  document.getElementById("gpsTxt").textContent=`${sharingNow()?"Sharing · ":""}${inside?"On lease":"Off lease"}${near?` · ${near.id} ${yd(nd)} yd ${card(bearing(me,near.ll))}`:""}`;
   const last=track.pts[track.pts.length-1];
   if(acc<40&&(!last||dist(last,me)>8)){track.pts.push(me);trackLine.setLatLngs(track.pts);S.set("track",track)}
 }
@@ -1501,11 +1508,22 @@ addEventListener("resize",placeBars);
 
 /* ---------- share my location ---------- */
 let shareOn=S.get("share",false), shareStart=S.get("shareStart",0), lastSent=null, lastSentAt=0;
+// Automatic sharing: on by default, only while on (or within 60 m of) a club property. Each member can turn it off.
+let autoShare=S.get("autoShare",true), autoActive=false;
+const sharingNow=()=>!!ME&&(shareOn||autoActive);
 const SHARE_HOURS=8;
 async function postNow(body){ try{ await api("POST",body); return true }catch(e){ return false } }
 function shareTick(c){
-  if(!shareOn||!ME||!me) return;
-  if(Date.now()-shareStart>SHARE_HOURS*3600e3){ setShare(false); toast(`Location sharing turned off after ${SHARE_HOURS} hours`); return }
+  if(!ME||!me) return;
+  const wasAuto=autoActive; autoActive=autoShare&&!!LEASE&&onProperty(me);
+  if(wasAuto!==autoActive){
+    if(!autoActive&&!shareOn) postNow({action:"stopShare"});
+    if(autoActive){ lastSent=null; lastSentAt=0; if(!shareOn) toast("You're on the property. The club can see your dot."); }
+    else if(!shareOn) toast("Left the property. Stopped sharing your location.");
+    renderShare(); resetSyncTimer();
+  }
+  if(shareOn&&Date.now()-shareStart>SHARE_HOURS*3600e3){ setShare(false); toast(`Everywhere sharing turned off after ${SHARE_HOURS} hours`); }
+  if(!sharingNow()) return;
   const moved=!lastSent||dist(lastSent,me)>10, stale=Date.now()-lastSentAt>120e3, soon=Date.now()-lastSentAt>20e3;
   if(moved&&!soon){ clearTimeout(window._shareRetry); window._shareRetry=setTimeout(()=>shareTick(c),20e3-(Date.now()-lastSentAt)+200); return }
   if(soon&&(moved||stale)&&navigator.onLine!==false){
@@ -1517,15 +1535,24 @@ function setShare(on){
   if(on&&!ME){openSignIn();$$("shareToggle").checked=false;return}
   shareOn=on; S.set("share",on);
   if(on){ shareStart=Date.now(); S.set("shareStart",shareStart); lastSent=null; lastSentAt=0; startCompass(); startGps(); if(me) shareTick(); toast("Sharing your location with the club"); }
-  else { postNow({action:"stopShare"}); toast("Stopped sharing your location"); }
+  else { if(!autoActive) postNow({action:"stopShare"}); toast(autoActive?"Still sharing while you're on the property":"Stopped sharing your location"); }
   renderShare(); resetSyncTimer();
 }
 function renderShare(warn){
-  $$("shareToggle").checked=shareOn;
-  $$("shareTxt").textContent=!shareOn?"Off. Only you see your dot.":
-    warn||`On. The club sees your dot while this app is open on your screen. Turns off by itself at ${new Date(shareStart+SHARE_HOURS*3600e3).toLocaleTimeString("en-US",{hour:"numeric",minute:"2-digit"})}.`;
+  $$("shareToggle").checked=shareOn; $$("autoShareToggle").checked=autoShare;
+  $$("autoShareTxt").textContent=!autoShare?"Off. The club won't see you unless you turn on everywhere sharing below.":
+    autoActive?(warn||"Sharing now: you're on the property. Your dot updates while this app is open on your screen."):
+    "On. Starts by itself when you're on the property and stops when you leave.";
+  $$("shareTxt").textContent=!shareOn?"Off.":
+    (!autoActive&&warn)||`On, even off the property. Turns off by itself at ${new Date(shareStart+SHARE_HOURS*3600e3).toLocaleTimeString("en-US",{hour:"numeric",minute:"2-digit"})}.`;
 }
 $$("shareToggle").onchange=e=>setShare(e.target.checked);
+$$("autoShareToggle").onchange=e=>{
+  autoShare=e.target.checked; S.set("autoShare",autoShare);
+  if(autoShare){ if(ME) startGpsQuiet(); if(me) shareTick(); toast("You'll share your location while on the property"); }
+  else { if(autoActive&&!shareOn) postNow({action:"stopShare"}); autoActive=false; toast("Won't share your location on the property"); }
+  renderShare(); resetSyncTimer();
+};
 function ago(iso){const m=Math.round((Date.now()-Date.parse(iso))/60000);return m<1?"just now":m===1?"1 min ago":`${m} min ago`}
 function renderMates(){
   mateLayer.clearLayers();
@@ -1541,7 +1568,7 @@ function renderMates(){
   });
 }
 let syncTimer=null;
-function resetSyncTimer(){ clearInterval(syncTimer); syncTimer=setInterval(()=>{if(document.visibilityState==="visible")sync()},(shareOn||LOCS.length)?20000:45000) }
+function resetSyncTimer(){ clearInterval(syncTimer); syncTimer=setInterval(()=>{if(document.visibilityState==="visible")sync()},(sharingNow()||LOCS.length)?20000:45000) }
 
 /* ================= property editor (admin only) ================= */
 const LEASE_ACTIONS=["saveProperty","removeProperty","saveStand","deleteStand"];
@@ -1780,6 +1807,7 @@ loadWeather();
 if(cfg.code) sync(); else openSignIn();
 resetSyncTimer();
 renderShare(); if(shareOn&&cfg.code){ if(Date.now()-shareStart>SHARE_HOURS*3600e3) setShare(false); else { startGps(); } }
+if(autoShare&&cfg.code) startGpsQuiet();
 setInterval(()=>{renderMates();if(shareOn)shareTick()},30000);
 setInterval(renderHunters,60000);
 setInterval(renderLight,30000);
