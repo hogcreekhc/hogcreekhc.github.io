@@ -187,6 +187,8 @@ label.f{display:grid;gap:4px;font:500 12px var(--mono);color:var(--muted);text-t
 .winds{display:grid;grid-template-columns:repeat(8,1fr);gap:4px}
 .winds button{padding:7px 0;border:1px solid var(--line);background:var(--panel2);border-radius:8px;font:600 12px var(--mono);cursor:pointer}
 .winds button[aria-pressed="true"]{background:#1f5c38;border-color:var(--good)}
+#stFacing button[aria-pressed="true"]{background:#7a3a17;border-color:var(--accent)}
+.face-ic{width:70px;height:70px;pointer-events:none}.face-ic svg{width:70px;height:70px;display:block}
 input[type=range]{padding:0;accent-color:var(--accent)}
 .conebar{margin:2px 0 10px;min-width:0;max-width:100%}.conebar .ct{display:flex;align-items:center;justify-content:space-between;gap:8px;font-size:14px;margin-bottom:2px}
 .conebar input{width:100%}
@@ -472,6 +474,10 @@ input[type=range]{padding:0;accent-color:var(--accent)}
     <div class="sec">Location</div>
     <div class="status" id="stWhere"></div>
     <div class="row"><button type="button" class="btn" id="stGps">Use my location</button><button type="button" class="btn" id="stPick">Pick on map</button></div>
+    <div class="sec">Facing <span style="text-transform:none;letter-spacing:0">(the way you look from the stand, toward the deer)</span></div>
+    <div class="winds" id="stFacing"></div>
+    <div class="row"><button type="button" class="btn" id="stFaceHere">Face this way</button><button type="button" class="btn" id="stFaceNone">No facing</button></div>
+    <div class="note" id="stFaceTxt"></div>
     <div class="sec">Good winds <span style="text-transform:none;letter-spacing:0">(direction the wind blows from)</span></div>
     <div class="winds" id="stWinds"></div>
     <div class="row"><button type="button" class="btn" id="stAny">Any wind</button><button type="button" class="btn" id="stNone">Clear</button></div>
@@ -591,6 +597,7 @@ function buildLease(fit){
   (LEASE.stands||[]).forEach(s=>{
     const m=L.marker(s.ll,{icon:L.divIcon({className:"lbl",html:`<div class="stand-ic">${esc(s.id)}</div>`,iconSize:[34,34],iconAnchor:[17,17]}),zIndexOffset:500});
     m.bindPopup(()=>standPopup(s)); m.addTo(standLayer); standMarkers[s.id]=m;
+    if(s.facing!=null&&isFinite(s.facing)) L.marker(s.ll,{icon:L.divIcon({className:"lbl",html:`<div class="face-ic" style="transform:rotate(${+s.facing}deg)"><svg viewBox="0 0 70 70"><path d="M35 1 L44 15 L26 15 Z" fill="#fff" stroke="#111" stroke-width="1.5" stroke-linejoin="round"/></svg></div>`,iconSize:[70,70],iconAnchor:[35,35]}),interactive:false,zIndexOffset:490}).addTo(standLayer);
   });
   (LEASE.oldPins||[]).forEach(p=>{
     L.marker(p.ll,{icon:L.divIcon({className:"lbl",html:`<div class="old-ic">${esc(p.n)}</div>`,iconSize:[20,20],iconAnchor:[10,10]})})
@@ -821,7 +828,7 @@ function drawCones(){
   if(map.hasLayer(pinLayer)&&pinFilter.has("stand")) PINS.filter(p=>!p.deleted&&p.type==="stand").forEach(p=>cone([+p.lat,+p.lon],"#ffffff"));
 }
 function standPopup(s){
-  let html=`<h4>${esc(s.id)} · ${esc(s.name)}</h4><div>${esc(s.type)}${s.kids?" · kid friendly":""}</div><div style="margin-top:4px">${esc(s.why)}</div><div class="pop-m" style="margin-top:4px">Walk in: ${esc(s.walk)}</div>`;
+  let html=`<h4>${esc(s.id)} · ${esc(s.name)}</h4><div>${esc(s.type)}${s.kids?" · kid friendly":""}${s.facing!=null&&isFinite(s.facing)?` · faces ${card(+s.facing)}`:""}</div><div style="margin-top:4px">${esc(s.why)}</div><div class="pop-m" style="margin-top:4px">Walk in: ${esc(s.walk)}</div>`;
   if(WX){const i=wxIndex(new Date()); if(i>=0){const w=windFit(s,WX.hourly.wind_direction_10m[i]); html+=`<div class="pop-m">Wind now ${card(WX.hourly.wind_direction_10m[i])}: <span class="${w.f>=1?'g':w.f>=.5?'o':'b'}">${w.txt}</span></div>`}}
   if(me) html+=`<div class="pop-m">${yd(dist(me,s.ll))} yd from you, heading ${card(bearing(me,s.ll))}</div>`;
   html+=`<div class="pop-m">${s.ll[0]}, ${s.ll[1]}</div>`;
@@ -1823,7 +1830,7 @@ function openStandEditor(s,keep){
   if(!ME?.admin||!LEASE) return;
   if(!keep){
     const c=map.getCenter();
-    STE={orig:s,ll:s?s.ll.slice():(me?[r6(me[0]),r6(me[1])]:[r6(c.lat),r6(c.lng)]),dirs:dirsFromWinds(s?.winds||[[0,360]]),windsDirty:!s};
+    STE={orig:s,ll:s?s.ll.slice():(me?[r6(me[0]),r6(me[1])]:[r6(c.lat),r6(c.lng)]),dirs:dirsFromWinds(s?.winds||[[0,360]]),windsDirty:!s,facing:s&&s.facing!=null&&isFinite(s.facing)?+s.facing:null,faceSet:false};
     $$("stTitle").textContent=s?`Edit ${s.id}`:"New stand";
     $$("stId").value=s?s.id:nextStandId(); $$("stId").readOnly=!!s;
     $$("stName").value=s?.name||""; $$("stType").value=s?.type||"";
@@ -1835,13 +1842,29 @@ function openStandEditor(s,keep){
   }
   $$("stMsg").textContent=""; renderStandForm(); $$("standModal").hidden=false;
 }
+// good winds for a facing: wind coming toward your face (within about 60°), so your scent goes behind you
+function dirsForFacing(f){const on=new Set();DIRS.forEach((_,i)=>{if(angDiff(i*22.5,f)<=60)on.add(i)});return on}
+function setFacing(f){
+  STE.facing=f==null?null:Math.round(((f%360)+360)%360); STE.faceSet=true;
+  if(STE.facing!=null){STE.dirs=dirsForFacing(STE.facing);STE.windsDirty=true}
+  renderStandForm();
+}
 function renderStandForm(){
+  const fc=$$("stFacing"); fc.innerHTML=""; const near=STE.facing==null?-1:Math.round(STE.facing/22.5)%16;
+  DIRS.forEach((d,i)=>{const b=document.createElement("button");b.type="button";b.textContent=d;b.setAttribute("aria-pressed",i===near);b.onclick=()=>setFacing(i*22.5);fc.appendChild(b)});
+  $$("stFaceTxt").textContent=STE.facing==null?"No facing set. Pick one and the good winds below fill in for you.":
+    `Faces ${card(STE.facing)} (${STE.facing}°).${STE.faceSet?" Good winds below were set from it: any wind in your face. You can still change them.":""}`;
   $$("stWhere").textContent=`${STE.ll[0].toFixed(6)}, ${STE.ll[1].toFixed(6)}${me?` · ${yd(dist(me,STE.ll))} yd from you`:""}${props().some(p=>inPoly(STE.ll,p.boundary))?"":" · outside the boundary"}`;
   const w=$$("stWinds"); w.innerHTML="";
   DIRS.forEach((d,i)=>{const b=document.createElement("button");b.type="button";b.textContent=d;b.setAttribute("aria-pressed",STE.dirs.has(i));b.onclick=()=>{STE.dirs.has(i)?STE.dirs.delete(i):STE.dirs.add(i);STE.windsDirty=true;renderStandForm()};w.appendChild(b)});
   [["stAm","stAmV"],["stPm","stPmV"],["stMid","stMidV"],["stRut","stRutV"]].forEach(([i,v])=>$$(v).textContent=$$(i).value);
 }
 ["stAm","stPm","stMid","stRut"].forEach(i=>$$(i).oninput=renderStandForm);
+$$("stFaceNone").onclick=()=>{STE.facing=null;STE.faceSet=true;renderStandForm()};
+$$("stFaceHere").onclick=()=>{
+  if(compassLive&&lastHeading!=null){setFacing(lastHeading);toast(`Facing ${card(lastHeading)}`);return}
+  startCompass(); toast("Hold the phone flat, top pointed the way you face, then tap Face this way again");
+};
 $$("stAny").onclick=()=>{STE.dirs=new Set(DIRS.map((_,i)=>i));STE.windsDirty=true;renderStandForm()};
 $$("stNone").onclick=()=>{STE.dirs=new Set();STE.windsDirty=true;renderStandForm()};
 $$("stGps").onclick=()=>{ if(!me){startGps();toast("Getting your location… tap again in a moment");return} STE.ll=[r6(me[0]),r6(me[1])]; if(props().length>1)$$("stProp").value=propFor(STE.ll); renderStandForm(); toast("Moved to where you're standing") };
@@ -1858,10 +1881,10 @@ $$("standForm").onsubmit=e=>{
   if(!STE.orig&&(LEASE.stands||[]).some(s=>s.id===id)){$$("stMsg").textContent=`${id} is already used. Pick another label.`;return}
   const st={id,propertyId:$$("stProp").value||propFor(STE.ll),name:$$("stName").value.trim().slice(0,60)||id,type:$$("stType").value.trim().slice(0,40),ll:STE.ll.slice(),
     winds:STE.windsDirty||!STE.orig?windsFromDirs(STE.dirs):STE.orig.winds,am:+$$("stAm").value/10,pm:+$$("stPm").value/10,mid:+$$("stMid").value/10,rutMid:+$$("stRut").value/10,
-    kids:$$("stKids").checked,why:$$("stWhy").value.trim().slice(0,300),walk:$$("stWalk").value.trim().slice(0,300)};
+    kids:$$("stKids").checked,why:$$("stWhy").value.trim().slice(0,300),walk:$$("stWalk").value.trim().slice(0,300),facing:STE.facing};
   const list=(LEASE.stands||[]).slice(), i=list.findIndex(s=>s.id===id); if(i>=0) list[i]=st; else list.push(st); LEASE.stands=list;
   $$("standModal").hidden=true; saveLease();
-  const {ll,...rest}=st; enqueue(Object.assign({action:"saveStand",lat:ll[0],lon:ll[1]},rest)); toast(`Saved ${id} ${st.name}`);
+  const {ll,...rest}=st; enqueue(Object.assign({action:"saveStand",lat:ll[0],lon:ll[1]},rest,{facing:st.facing==null?"":st.facing})); toast(`Saved ${id} ${st.name}`);
 };
 $$("stDelete").onclick=()=>{
   const b=$$("stDelete"); if(!b.dataset.sure){b.dataset.sure=1;b.textContent="Tap again to delete";return}
