@@ -779,14 +779,18 @@ function renderConeBar(){
 document.getElementById("coneHr").oninput=e=>{const {a}=coneRange(); coneT=new Date(+a+e.target.value*3600e3); drawCones()};
 document.getElementById("coneNow").onclick=()=>{coneT=null; if(selDay!==0){selDay=0; renderPlan()} drawCones()};
 function drawCones(){
-  coneLayer.clearLayers(); renderConeBar(); if(!WX||!LEASE||!map.hasLayer(standLayer)) return;  // cones belong to the stands: hidden when Stands is off
+  // Cones belong to what they come from: club stands (hidden when Stands is off) and dropped
+  // Deer stand pins (hidden when Club pins is off or the Deer stand filter is off).
+  coneLayer.clearLayers(); renderConeBar(); if(!WX) return;
   const i=wxIndex(coneTime()); if(i<0) return;
   const dir=WX.hourly.wind_direction_10m[i]; const to=(dir+180)%360;
-  LEASE.stands.forEach(s=>{
-    const pts=[s.ll]; for(let a=-22;a<=22;a+=4) pts.push(dest(s.ll,to+a,180));
-    const fit=windFit(s,dir).f; const col=fit>=1?"#5fd38a":fit>=.5?"#e9c84a":"#ef6a5a";
-    L.polygon(pts,{color:col,weight:1,fillColor:col,fillOpacity:.18,interactive:false}).addTo(coneLayer);
+  const cone=(ll,col)=>{const pts=[ll]; for(let a=-22;a<=22;a+=4) pts.push(dest(ll,to+a,180));
+    L.polygon(pts,{color:col,weight:1,fillColor:col,fillOpacity:.18,interactive:false}).addTo(coneLayer)};
+  if(LEASE&&map.hasLayer(standLayer)) LEASE.stands.forEach(s=>{
+    const fit=windFit(s,dir).f; cone(s.ll,fit>=1?"#5fd38a":fit>=.5?"#e9c84a":"#ef6a5a");
   });
+  // pins have no "good winds" saved, so their cones are white
+  if(map.hasLayer(pinLayer)&&pinFilter.has("stand")) PINS.filter(p=>!p.deleted&&p.type==="stand").forEach(p=>cone([+p.lat,+p.lon],"#ffffff"));
 }
 function standPopup(s){
   let html=`<h4>${esc(s.id)} · ${esc(s.name)}</h4><div>${esc(s.type)}${s.kids?" · kid friendly":""}</div><div style="margin-top:4px">${esc(s.why)}</div><div class="pop-m" style="margin-top:4px">Walk in: ${esc(s.walk)}</div>`;
@@ -886,7 +890,7 @@ let CHECKINS=S.get("checkins",[]);
 const pinFilter=new Set(S.get("pinFilter",PIN_TYPES.map(t=>t.k)));
 function pinIcon(t){return L.divIcon({className:"lbl",html:`<div class="picon" style="background:${t.c}">${t.g}</div>`,iconSize:[26,26],iconAnchor:[13,13]})}
 function renderPins(){
-  pinLayer.clearLayers();
+  pinLayer.clearLayers(); if(typeof drawCones==="function") drawCones();
   const live=PINS.filter(p=>!p.deleted);
   live.filter(p=>pinFilter.has(p.type)).forEach(p=>{
     const t=TYPE[p.type]||TYPE.note;
@@ -1136,7 +1140,7 @@ function renderLegend(){
   lg.innerHTML=h; lg.hidden=!h;
 }
 map.on("layeradd layerremove",renderLegend);
-standLayer.on("add remove",()=>drawCones());
+standLayer.on("add remove",()=>drawCones()); pinLayer.on("add remove",()=>drawCones());
 // USGS servers drop the odd tile; retry each failed tile twice
 [ov["Elevation (high / low)"],ov[SLOPE],ov["10 ft contours"],bases["LiDAR terrain"]].forEach(l=>l.on("tileerror",e=>{const n=(e.tile._tries||0)+1;if(n>2)return;e.tile._tries=n;const src=e.tile.src;setTimeout(()=>{e.tile.src=src+(src.includes("?")?"&":"?")+"retry="+n},700*n)}));
 
