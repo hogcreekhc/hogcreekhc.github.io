@@ -434,6 +434,10 @@ input[type=range]{padding:0;accent-color:var(--accent)}
   <button class="btn primary" id="edDone">Done</button><button class="btn" id="edCancel">Cancel</button>
 </div>
 
+<div class="toolbar" id="pinPickBar" hidden>
+  <div style="flex:1;min-width:0"><div class="navt">Place the pin</div><div class="navs">Move the map until the crosshair is on the spot</div></div>
+  <button class="btn primary" id="pinPickUse">Use this spot</button><button class="btn" id="pinPickCancel">Back</button>
+</div>
 <div class="toolbar" id="pickBar" hidden>
   <div style="flex:1;min-width:0"><div class="navt">Place the stand</div><div class="navs">Move the map until the crosshair is on it</div></div>
   <button class="btn primary" id="pickUse">Use this spot</button><button class="btn" id="pickCancel">Cancel</button>
@@ -1078,11 +1082,11 @@ function renderHunters(){
 document.getElementById("outChip").onclick=()=>{selectTab("out");collapse(false)};
 
 /* ---------- add pin modal ---------- */
-let addWhere="gps", addType="scrape";
+let addWhere="gps", addType="scrape", pinLL=null;  // pinLL: the spot picked with the crosshair
 const modal=document.getElementById("addModal");
 function openAdd(){
   if(!ME){openSignIn();return}
-  addWhere=me?"gps":"map"; renderWhere();
+  addWhere=me?"gps":"map"; pinLL=null; renderWhere();
   const tb=document.getElementById("typeBtns"); tb.innerHTML="";
   PIN_TYPES.forEach(t=>{const b=document.createElement("button");b.type="button";b.setAttribute("aria-pressed",t.k===addType);b.innerHTML=`<i style="background:${t.c}"></i>${t.name}`;b.onclick=()=>{addType=t.k;[...tb.children].forEach(c=>c.setAttribute("aria-pressed",c===b))};tb.appendChild(b)});
   document.getElementById("pinNote").value=""; modal.hidden=false;
@@ -1092,21 +1096,30 @@ function renderWhere(){
   document.getElementById("whereMap").setAttribute("aria-pressed",addWhere==="map");
   document.getElementById("whereGps").classList.toggle("primary",addWhere==="gps");
   document.getElementById("whereMap").classList.toggle("primary",addWhere==="map");
-  document.getElementById("cross").classList.toggle("show",addWhere==="map");
-  const c=crossLL();
-  document.getElementById("whereTxt").textContent=addWhere==="gps"?(me?`${me[0].toFixed(6)}, ${me[1].toFixed(6)}`:"No GPS fix yet. Tap the location button, or use the crosshair."):`Crosshair: ${c.lat.toFixed(6)}, ${c.lng.toFixed(6)}. Close this, move the map, then tap + again.`;
+  document.getElementById("whereTxt").textContent=addWhere==="gps"?(me?`${me[0].toFixed(6)}, ${me[1].toFixed(6)}`:"No GPS fix yet. Tap the location button, or use the crosshair."):
+    pinLL?`Pin goes at ${pinLL[0].toFixed(6)}, ${pinLL[1].toFixed(6)}. Tap "At map crosshair" again to move it.`:"Tap \"At map crosshair\", then move the map to the spot.";
 }
+const pinBar=document.getElementById("pinPickBar"), crossEl=document.getElementById("cross");
+function startPinPick(){
+  addWhere="map"; modal.hidden=true; collapse(true); crossEl.classList.add("show"); pinBar.hidden=false;
+  if(pinLL) setTimeout(()=>{ // put the picked spot back under the crosshair
+    map.setView(pinLL,Math.max(map.getZoom(),17),{animate:false});
+    const b=crossEl.getBoundingClientRect(), ctr=map.getSize().divideBy(2);
+    map.panBy([ctr.x-(b.left+b.width/2),ctr.y-(b.top+b.height/2)],{animate:false})},260);
+}
+function endPinPick(){ pinBar.hidden=true; crossEl.classList.remove("show"); modal.hidden=false; renderWhere() }
+document.getElementById("pinPickUse").onclick=()=>{ const c=crossLL(); pinLL=[c.lat,c.lng]; endPinPick() };
+document.getElementById("pinPickCancel").onclick=()=>{ if(!pinLL&&me) addWhere="gps"; endPinPick() };
 document.getElementById("whereGps").onclick=()=>{if(!me){startGps();toast("Getting your location…")}addWhere="gps";renderWhere()};
-document.getElementById("whereMap").onclick=()=>{addWhere="map";renderWhere()};
-document.getElementById("pinCancel").onclick=()=>{modal.hidden=true;document.getElementById("cross").classList.remove("show")};
+document.getElementById("whereMap").onclick=startPinPick;
+document.getElementById("pinCancel").onclick=()=>{modal.hidden=true;pinBar.hidden=true;crossEl.classList.remove("show")};
 document.getElementById("addForm").onsubmit=e=>{
   e.preventDefault();
-  let ll; if(addWhere==="gps"){ if(!me){toast("No GPS fix yet");return} ll=me } else { const c=crossLL(); ll=[c.lat,c.lng] }
+  let ll; if(addWhere==="gps"){ if(!me){toast("No GPS fix yet");return} ll=me } else { if(!pinLL){startPinPick();return} ll=pinLL }
   addPin({id:Date.now().toString(36)+Math.random().toString(36).slice(2,7),t:new Date().toISOString(),lat:+ll[0].toFixed(6),lon:+ll[1].toFixed(6),type:addType,note:document.getElementById("pinNote").value.trim().slice(0,300),by:ME.name});
-  modal.hidden=true; document.getElementById("cross").classList.remove("show"); toast(TYPE[addType].name+" pinned");
+  modal.hidden=true; pinBar.hidden=true; crossEl.classList.remove("show"); pinLL=null; toast(TYPE[addType].name+" pinned");
 };
-document.getElementById("btnAdd").onclick=()=>{ if(document.getElementById("cross").classList.contains("show")&&modal.hidden){modal.hidden=false;renderWhere();return} openAdd() };
-map.on("move",()=>{if(!modal.hidden&&addWhere==="map")renderWhere()});
+document.getElementById("btnAdd").onclick=()=>{ if(!pinBar.hidden){document.getElementById("pinPickUse").click();return} openAdd() };
 
 /* ---------- sheet / tabs ---------- */
 function selectTab(p){document.querySelectorAll(".tabs button").forEach(b=>b.setAttribute("aria-selected",b.dataset.p===p));document.querySelectorAll(".pane").forEach(x=>x.classList.toggle("on",x.id==="p-"+p));S.set("tab",p)}
@@ -1533,7 +1546,7 @@ $$("btnMeasure").onclick=startMeasure;
 /* ---------- floating bars stack under the top chips ---------- */
 function placeBars(){
   let y=document.querySelector(".top").getBoundingClientRect().bottom+8;
-  ["navBar","bloodBar","measureBar","editBar","pickBar"].forEach(id=>{const el=$$(id); if(!el.hidden){el.style.top=y+"px"; y+=el.offsetHeight+8}});
+  ["navBar","bloodBar","measureBar","editBar","pickBar","pinPickBar"].forEach(id=>{const el=$$(id); if(!el.hidden){el.style.top=y+"px"; y+=el.offsetHeight+8}});
 }
 new MutationObserver(placeBars).observe(document.body,{subtree:true,attributes:true,attributeFilter:["hidden"]});
 addEventListener("resize",placeBars);
