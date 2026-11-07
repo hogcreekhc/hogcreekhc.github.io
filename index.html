@@ -167,6 +167,22 @@ label.f{display:grid;gap:4px;font:500 12px var(--mono);color:var(--muted);text-t
 .leaflet-popup-content{margin:10px 12px;font:14px/1.4 var(--body)}
 .leaflet-popup-content h4{margin:0 0 2px;font:700 17px var(--display)}
 .pop-m{font:12px var(--mono);color:var(--muted)}
+
+/* property editor (admin) */
+.toolbar.wrap{flex-wrap:wrap}
+.toolbar .btn[aria-pressed="true"]{background:#1d4f86;border-color:#4aa3ff}
+.toolbar .btn:disabled{opacity:.4}
+.toolbar label.f select{padding:6px 8px;font-size:14px}
+.vtx{width:16px;height:16px;border-radius:50%;background:#fff;border:3px solid #111;box-shadow:0 1px 4px rgba(0,0,0,.6);transition:transform .1s}
+.vtx.sel{background:var(--accent);transform:scale(1.45)}
+.vtx.first{border-color:var(--accent)}
+.vmid{width:12px;height:12px;border-radius:50%;background:rgba(255,255,255,.5);border:2px solid rgba(0,0,0,.55)}
+.swatch{width:34px;height:34px;border-radius:50%;border:3px solid transparent;cursor:pointer;padding:0}
+.swatch[aria-pressed="true"]{border-color:#fff;box-shadow:0 0 0 2px #000 inset}
+.winds{display:grid;grid-template-columns:repeat(8,1fr);gap:4px}
+.winds button{padding:7px 0;border:1px solid var(--line);background:var(--panel2);border-radius:8px;font:600 12px var(--mono);cursor:pointer}
+.winds button[aria-pressed="true"]{background:#1f5c38;border-color:var(--good)}
+input[type=range]{padding:0;accent-color:var(--accent)}
 </style>
 </head>
 <body>
@@ -268,6 +284,15 @@ label.f{display:grid;gap:4px;font:500 12px var(--mono);color:var(--muted);text-t
         <label class="f" style="flex:1">Rut ends<input id="setRutB" type="date"></label>
       </div>
       <button class="btn primary" id="btnSave">Save settings</button>
+      <div id="adminBox" hidden style="display:grid;gap:10px">
+        <div class="sec">Properties (admin)</div>
+        <div class="plist" id="propList"></div>
+        <button class="btn" id="btnAddProp">Add a property</button>
+        <div class="sec">Stands (admin)</div>
+        <div class="plist" id="standAdminList"></div>
+        <button class="btn" id="btnAddStand">Add a stand</button>
+        <p class="note" style="margin:0">Edits save to the club sheet (Properties and Stands tabs) and show up on everyone's phone on their next sync. With no signal they wait on this phone and upload when you get a bar.</p>
+      </div>
       <div class="sec">Offline map</div>
       <button class="btn" id="btnOffline">Save the lease map for no-signal use</button>
       <div class="status" id="offlineStatus"></div>
@@ -389,6 +414,62 @@ label.f{display:grid;gap:4px;font:500 12px var(--mono);color:var(--muted);text-t
   <button class="btn primary" id="bloodMark">Blood</button><button class="btn" id="bloodBack">Last sign</button><button class="btn" id="bloodEnd">End</button>
 </div>
 
+<div class="toolbar wrap" id="editBar" hidden>
+  <div style="flex:1 1 100%;min-width:0"><div class="navt" id="edTxt">--</div><div class="navs" id="edSub">--</div></div>
+  <div class="row" id="edWalkOpts" hidden style="flex:1 1 100%;flex-wrap:nowrap">
+    <label class="f" style="flex:1">New point every<select id="edSpacing"><option value="5">5 m</option><option value="10">10 m</option><option value="20">20 m</option><option value="30">30 m</option></select></label>
+    <label class="f" style="flex:1">Skip if GPS is worse than<select id="edAcc"><option value="8">±8 m</option><option value="15">±15 m</option><option value="25">±25 m</option></select></label>
+  </div>
+  <button class="btn" id="edTap">Tap map</button><button class="btn" id="edWalk">Walk it</button><button class="btn" id="edCorner" hidden>Corner here</button>
+  <button class="btn" id="edUndo">Undo</button><button class="btn danger" id="edDel">Delete point</button>
+  <button class="btn primary" id="edDone">Done</button><button class="btn" id="edCancel">Cancel</button>
+</div>
+
+<div class="toolbar" id="pickBar" hidden>
+  <div style="flex:1;min-width:0"><div class="navt">Place the stand</div><div class="navs">Move the map until the crosshair is on it</div></div>
+  <button class="btn primary" id="pickUse">Use this spot</button><button class="btn" id="pickCancel">Cancel</button>
+</div>
+
+<div class="modal" id="propModal" hidden>
+  <form class="card" id="propForm">
+    <h2 id="propTitle">Save property</h2>
+    <label class="f">Name<input id="propName" maxlength="60" required placeholder="Hog Creek"></label>
+    <div class="sec">Line color</div>
+    <div class="row" id="propColors"></div>
+    <div class="status" id="propInfo"></div>
+    <div class="row"><button class="btn primary" type="submit">Save property</button><button class="btn" type="button" id="propBack">Back</button></div>
+  </form>
+</div>
+
+<div class="modal" id="standModal" hidden>
+  <form class="card" id="standForm">
+    <h2 id="stTitle">Edit stand</h2>
+    <div class="row" style="flex-wrap:nowrap">
+      <label class="f" style="flex:0 0 92px">Map label<input id="stId" maxlength="12" required autocapitalize="characters" spellcheck="false"></label>
+      <label class="f" style="flex:1">Name<input id="stName" maxlength="60" required placeholder="Creek bottom ladder"></label>
+    </div>
+    <label class="f">Type<input id="stType" list="stTypes" maxlength="40" placeholder="Ladder, box blind…"></label>
+    <datalist id="stTypes"><option>Ladder</option><option>Double ladder</option><option>Box blind</option><option>Box stand</option><option>Ground blind</option><option>Hang-on</option><option>Climber spot</option></datalist>
+    <label class="f" id="stPropWrap">Property<select id="stProp"></select></label>
+    <div class="sec">Location</div>
+    <div class="status" id="stWhere"></div>
+    <div class="row"><button type="button" class="btn" id="stGps">Use my location</button><button type="button" class="btn" id="stPick">Pick on map</button></div>
+    <div class="sec">Good winds <span style="text-transform:none;letter-spacing:0">(direction the wind blows from)</span></div>
+    <div class="winds" id="stWinds"></div>
+    <div class="row"><button type="button" class="btn" id="stAny">Any wind</button><button type="button" class="btn" id="stNone">Clear</button></div>
+    <div class="sec">How good is it (0 = never, 10 = best)</div>
+    <label class="f">Mornings: <b id="stAmV"></b><input type="range" min="0" max="10" id="stAm"></label>
+    <label class="f">Evenings: <b id="stPmV"></b><input type="range" min="0" max="10" id="stPm"></label>
+    <label class="f">Midday: <b id="stMidV"></b><input type="range" min="0" max="10" id="stMid"></label>
+    <label class="f">Midday during the rut: <b id="stRutV"></b><input type="range" min="0" max="10" id="stRut"></label>
+    <label class="sharebox"><input type="checkbox" id="stKids"><span><b>Kid friendly</b></span></label>
+    <label class="f">Why it's good<textarea id="stWhy" rows="2" maxlength="300" placeholder="Over the scrape line, 40 yd off the blowdown"></textarea></label>
+    <label class="f">How to walk in<textarea id="stWalk" rows="2" maxlength="300" placeholder="End of main road, then 150 m west"></textarea></label>
+    <div class="status" id="stMsg"></div>
+    <div class="row"><button class="btn primary" type="submit">Save stand</button><button class="btn" type="button" data-close>Cancel</button><button class="btn danger" type="button" id="stDelete">Delete stand</button></div>
+  </form>
+</div>
+
 <div class="legend" id="legend" hidden></div>
 <div class="toast" id="toast"></div>
 
@@ -465,13 +546,18 @@ const navLayer=L.layerGroup().addTo(map), measLayer=L.layerGroup().addTo(map), b
 const defaultsOn=["Public land (WMA)","Neighbor lines","Members sharing location","Work list","Harvests","Hunters","10 ft contours","Boundary","Blowdown & scrape line","Roads","Camp","Stands","Club pins","Scent cones","My track"];
 const ovOn=S.get("ov",defaultsOn);
 Object.entries(ov).forEach(([n,l])=>{if(ovOn.includes(n)) l.addTo(map)});
-function fitLease(){if(!LEASE)return;const h=document.body.classList.contains("min")?70:Math.round(innerHeight*.44)+10;map.fitBounds(L.polygon(LEASE.boundary).getBounds(),{paddingTopLeft:[20,110],paddingBottomRight:[70,h]})}
-const standMarkers={};
+function fitLease(){if(!LEASE)return;const h=document.body.classList.contains("min")?70:Math.round(innerHeight*.44)+10;map.fitBounds(leaseBounds(),{paddingTopLeft:[20,110],paddingBottomRight:[70,h]})}
+// All of the club's properties. Older backends only sent one boundary.
+function props(){if(!LEASE)return[];return (LEASE.properties&&LEASE.properties.length)?LEASE.properties:[{id:"P1",name:"Hog Creek",color:"#ffd600",boundary:LEASE.boundary}]}
+function leaseBounds(){const b=L.latLngBounds([]);props().forEach(p=>p.boundary.forEach(q=>b.extend(q)));return b}
+const standMarkers={}, propPolys={};
 function buildLease(fit){
   ["Boundary","Blowdown & scrape line","Roads","Camp","Neighbor lines","Public land (WMA)"].forEach(k=>ov[k].clearLayers());
   standLayer.clearLayers(); oldLayer.clearLayers();
   if(!LEASE) return;
-  L.polygon(LEASE.boundary,{color:"#ffd600",weight:3.5,fill:true,fillOpacity:.04}).addTo(ov["Boundary"]);
+  props().forEach(p=>{
+    propPolys[p.id]=L.polygon(p.boundary,{color:p.color||"#ffd600",weight:3.5,fill:true,fillOpacity:.04}).bindPopup(()=>propPopup(p)).addTo(ov["Boundary"]);
+  });
   if(LEASE.neighbors){
     LEASE.neighbors.lines.forEach(l=>L.polyline(l,{color:"#ff5a4f",weight:2.5,dashArray:"7 5",opacity:.9}).bindPopup("<h4>Neighbor property line</h4>Traced from onX, about ±30 m. Don't use it to settle a line.").addTo(ov["Neighbor lines"]));
     (LEASE.neighbors.public||[]).forEach(p=>L.polygon(p.poly,{color:"#3fbf5f",weight:2,dashArray:"4 4",fillColor:"#3fbf5f",fillOpacity:.18}).bindPopup(`<h4>${esc(p.name)}</h4>Public hunting land (USFS). On WMA hunt days, pressure here can push deer onto the lease.`).addTo(ov["Public land (WMA)"]));
@@ -681,7 +767,15 @@ function standPopup(s){
   if(WX){const i=wxIndex(new Date()); if(i>=0){const w=windFit(s,WX.hourly.wind_direction_10m[i]); html+=`<div class="pop-m">Wind now ${card(WX.hourly.wind_direction_10m[i])}: <span class="${w.f>=1?'g':w.f>=.5?'o':'b'}">${w.txt}</span></div>`}}
   if(me) html+=`<div class="pop-m">${yd(dist(me,s.ll))} yd from you, heading ${card(bearing(me,s.ll))}</div>`;
   html+=`<div class="pop-m">${s.ll[0]}, ${s.ll[1]}</div>`;
-  return withHuntButton(html,{stand:s.id,label:`${s.id} ${s.name}`,ll:s.ll});
+  const d=withHuntButton(html,{stand:s.id,label:`${s.id} ${s.name}`,ll:s.ll});
+  if(ME?.admin){const e=document.createElement("button");e.className="btn";e.textContent="Edit stand";e.onclick=()=>{map.closePopup();openStandEditor(s)};d.querySelector(".mini").appendChild(e)}
+  return d;
+}
+function propPopup(p){
+  const d=document.createElement("div");
+  d.innerHTML=`<h4>${esc(p.name||"Property")}</h4><div class="pop-m">${acres(p.boundary).toFixed(1)} acres · ${(ringLen(p.boundary)/1609.34).toFixed(2)} mi around</div>`;
+  if(ME?.admin){const e=document.createElement("button");e.className="btn";e.style.marginTop="8px";e.textContent="Edit boundary";e.onclick=()=>{map.closePopup();startEdit(p)};d.appendChild(e)}
+  return d;
 }
 function withHuntButton(html,spot){
   const d=document.createElement("div"); d.innerHTML=html;
@@ -716,12 +810,12 @@ function onPos(p){
   if(!meMarker){meMarker=L.marker(me,{icon:L.divIcon({className:"lbl",html:'<div class="mewrap" id="mewrap"><svg class="cone" id="mecone" viewBox="0 0 90 90"><defs><radialGradient id="cg" cx="45" cy="45" r="45" gradientUnits="userSpaceOnUse"><stop offset=".15" stop-color="#4aa3ff" stop-opacity=".95"/><stop offset="1" stop-color="#4aa3ff" stop-opacity=".1"/></radialGradient></defs><path d="M45 45 L24 4 A45 45 0 0 1 66 4 Z" fill="url(#cg)" stroke="#fff" stroke-opacity=".7" stroke-width="1.5"/></svg><div class="me"></div></div>',iconSize:[90,90],iconAnchor:[45,45]}),zIndexOffset:1000,interactive:false}).addTo(map);if(lastHeading!=null)setHeading(lastHeading);meCircle=L.circle(me,{radius:acc,color:"#4aa3ff",weight:1,fillOpacity:.08,interactive:false}).addTo(map)}
   else{meMarker.setLatLng(me);meCircle.setLatLng(me).setRadius(acc)}
   if(follow) map.panTo(me);
-  updateNav(); bloodOnPos(); shareTick(p.coords); {const lk=!!reserveLock(); if(window._lockSeen!==lk){window._lockSeen=lk;renderRes()}}
+  updateNav(); bloodOnPos(); shareTick(p.coords); edWalkPos(p.coords); {const lk=!!reserveLock(); if(window._lockSeen!==lk){window._lockSeen=lk;renderRes()}}
   if(!LEASE){document.getElementById("gpsDot").classList.add("on");document.getElementById("gpsTxt").textContent="GPS on";return}
-  const inside=inPoly(me,LEASE.boundary);
+  const inside=props().some(p=>inPoly(me,p.boundary));
   document.getElementById("gpsDot").classList.add("on");
-  let near=null,nd=1e9; LEASE.stands.forEach(s=>{const d=dist(me,s.ll);if(d<nd){nd=d;near=s}});
-  document.getElementById("gpsTxt").textContent=`${inside?"On lease":"Off lease"} · ${near.id} ${yd(nd)} yd ${card(bearing(me,near.ll))}`;
+  let near=null,nd=1e9; (LEASE.stands||[]).forEach(s=>{const d=dist(me,s.ll);if(d<nd){nd=d;near=s}});
+  document.getElementById("gpsTxt").textContent=`${inside?"On lease":"Off lease"}${near?` · ${near.id} ${yd(nd)} yd ${card(bearing(me,near.ll))}`:""}`;
   const last=track.pts[track.pts.length-1];
   if(acc<40&&(!last||dist(last,me)>8)){track.pts.push(me);trackLine.setLatLngs(track.pts);S.set("track",track)}
 }
@@ -812,7 +906,8 @@ async function sync(){
 }
 function applyServer(j){
   ME=j.me; S.set("me",ME);
-  const fresh=JSON.stringify(j.lease||null)!==JSON.stringify(LEASE);
+  // keep the admin's unsent property edits on screen until they upload
+  const fresh=JSON.stringify(j.lease||null)!==JSON.stringify(LEASE)&&!QUEUE.some(q=>LEASE_ACTIONS.includes(q.action));
   if(fresh){ const first=!LEASE; LEASE=j.lease||null; S.set("lease",LEASE); buildLease(first); }
   const pending=PINS.filter(p=>p._pending);
   PINS=(j.pins||[]).concat(pending.filter(p=>!(j.pins||[]).some(q=>q.id===p.id)));
@@ -829,7 +924,7 @@ function applyServer(j){
   renderHunters();
   S.set("pins",PINS); S.set("syncAt",Date.now());
   document.getElementById("whoami").textContent=ME?`${ME.name}${ME.admin?" (admin)":""}`:"Not signed in";
-  if(fresh) renderAll();
+  if(fresh) renderAll(); else renderAdmin();
 }
 function signOut(silent){
   cfg.code=""; S.set("cfg",cfg); ME=null; LEASE=null; PINS=[]; QUEUE=[]; CHECKINS=[]; RES=[]; SITS=[]; TASKS=[]; HARV=[]; MEMBERS=[];
@@ -962,7 +1057,7 @@ function renderWhere(){
   document.getElementById("whereGps").classList.toggle("primary",addWhere==="gps");
   document.getElementById("whereMap").classList.toggle("primary",addWhere==="map");
   document.getElementById("cross").classList.toggle("show",addWhere==="map");
-  const c=map.getCenter();
+  const c=crossLL();
   document.getElementById("whereTxt").textContent=addWhere==="gps"?(me?`${me[0].toFixed(6)}, ${me[1].toFixed(6)}`:"No GPS fix yet. Tap the location button, or use the crosshair."):`Crosshair: ${c.lat.toFixed(6)}, ${c.lng.toFixed(6)}. Close this, move the map, then tap + again.`;
 }
 document.getElementById("whereGps").onclick=()=>{if(!me){startGps();toast("Getting your location…")}addWhere="gps";renderWhere()};
@@ -970,7 +1065,7 @@ document.getElementById("whereMap").onclick=()=>{addWhere="map";renderWhere()};
 document.getElementById("pinCancel").onclick=()=>{modal.hidden=true;document.getElementById("cross").classList.remove("show")};
 document.getElementById("addForm").onsubmit=e=>{
   e.preventDefault();
-  let ll; if(addWhere==="gps"){ if(!me){toast("No GPS fix yet");return} ll=me } else { const c=map.getCenter(); ll=[c.lat,c.lng] }
+  let ll; if(addWhere==="gps"){ if(!me){toast("No GPS fix yet");return} ll=me } else { const c=crossLL(); ll=[c.lat,c.lng] }
   addPin({id:Date.now().toString(36)+Math.random().toString(36).slice(2,7),t:new Date().toISOString(),lat:+ll[0].toFixed(6),lon:+ll[1].toFixed(6),type:addType,note:document.getElementById("pinNote").value.trim().slice(0,300),by:ME.name});
   modal.hidden=true; document.getElementById("cross").classList.remove("show"); toast(TYPE[addType].name+" pinned");
 };
@@ -1020,7 +1115,7 @@ async function saveOffline(){
   if(!LEASE){st.textContent="Sign in first.";return}
   if(!("caches" in window)){st.textContent="This browser can't save maps.";return}
   btn.disabled=true;
-  const b=L.polygon(LEASE.boundary).getBounds().pad(0.15);
+  const b=leaseBounds().pad(0.15);
   const layers=[bases["Aerial"],ov["10 ft contours"],ov["Elevation (high / low)"],ov["Slope (flat / steep)"],bases["LiDAR terrain"],bases["Topo"]];
   const jobs=[]; for(let z=13;z<=18;z++) for(const c of tilesFor(b,z)) for(const l of layers){ const nz=l.options.maxNativeZoom||18; if(z>nz) continue; jobs.push(l.getTileUrl(c)); }
   const cache=await caches.open("hc-tiles-v1"); let done=0, fail=0, i=0;
@@ -1107,10 +1202,10 @@ function noShow(r){
   return Date.now()>start+(eve?(+CSET.evening_no_show_minutes||30):(+CSET.morning_no_show_minutes||30))*60e3;
 }
 const liveRes=()=>RES.filter(r=>String(r.date)>=dayKey(new Date())&&!noShow(r));
-function onProperty(ll){
-  if(!LEASE||!ll) return false; if(inPoly(ll,LEASE.boundary)) return true;
-  const B=LEASE.boundary; let best=1e9;
-  for(let i=0;i<B.length;i++){const a=B[i],b=B[(i+1)%B.length];
+function onProperty(ll){   // on (or within 60 m of) any club property
+  if(!LEASE||!ll) return false; if(props().some(p=>inPoly(ll,p.boundary))) return true;
+  let best=1e9;
+  for(const B of props().map(p=>p.boundary)) for(let i=0;i<B.length;i++){const a=B[i],b=B[(i+1)%B.length];
     const kx=111320*Math.cos(ll[0]*Math.PI/180),ky=110540,ax=(a[1]-ll[1])*kx,ay=(a[0]-ll[0])*ky,bx=(b[1]-ll[1])*kx,by=(b[0]-ll[0])*ky,dx=bx-ax,dy=by-ay;
     const t=Math.max(0,Math.min(1,-(ax*dx+ay*dy)/(dx*dx+dy*dy||1))); best=Math.min(best,Math.hypot(ax+t*dx,ay+t*dy))}
   return best<=60;
@@ -1398,7 +1493,7 @@ $$("btnMeasure").onclick=startMeasure;
 /* ---------- floating bars stack under the top chips ---------- */
 function placeBars(){
   let y=document.querySelector(".top").getBoundingClientRect().bottom+8;
-  ["navBar","bloodBar","measureBar"].forEach(id=>{const el=$$(id); if(!el.hidden){el.style.top=y+"px"; y+=el.offsetHeight+8}});
+  ["navBar","bloodBar","measureBar","editBar","pickBar"].forEach(id=>{const el=$$(id); if(!el.hidden){el.style.top=y+"px"; y+=el.offsetHeight+8}});
 }
 new MutationObserver(placeBars).observe(document.body,{subtree:true,attributes:true,attributeFilter:["hidden"]});
 addEventListener("resize",placeBars);
@@ -1448,8 +1543,237 @@ function renderMates(){
 let syncTimer=null;
 function resetSyncTimer(){ clearInterval(syncTimer); syncTimer=setInterval(()=>{if(document.visibilityState==="visible")sync()},(shareOn||LOCS.length)?20000:45000) }
 
+/* ================= property editor (admin only) ================= */
+const LEASE_ACTIONS=["saveProperty","removeProperty","saveStand","deleteStand"];
+const PROP_COLORS=["#ffd600","#00d0ff","#ff7ad9","#7dff6a","#ff9f1a","#ffffff"];
+function ringArea(r){ // square meters on the sphere
+  if(!r||r.length<3) return 0; let s=0;
+  for(let i=0;i<r.length;i++){const a=r[i],b=r[(i+1)%r.length]; s+=rad(b[1]-a[1])*(2+Math.sin(rad(a[0]))+Math.sin(rad(b[0])))}
+  return Math.abs(s*R*R/2);
+}
+const acres=r=>ringArea(r)/4046.86;
+function ringLen(r){let s=0;if(!r||r.length<2)return 0;for(let i=0;i<r.length;i++)s+=dist(r[i],r[(i+1)%r.length]);return s}
+const r6=v=>+(+v).toFixed(6);
+// the spot under the crosshair (it sits above the true map center when the bottom panel is open)
+function crossLL(){const el=$$("cross");if(!el.classList.contains("show"))return map.getCenter();const b=el.getBoundingClientRect();return map.containerPointToLatLng([b.left+b.width/2,b.top+b.height/2])}
+let wakeLock=null;
+async function keepAwake(on){try{if(on&&!wakeLock&&navigator.wakeLock){wakeLock=await navigator.wakeLock.request("screen");wakeLock.addEventListener("release",()=>wakeLock=null)}else if(!on&&wakeLock){await wakeLock.release();wakeLock=null}}catch(e){}}
+document.addEventListener("visibilitychange",()=>{if(document.visibilityState==="visible"&&ED&&ED.mode==="walk")keepAwake(true)});
+function saveLease(){S.set("lease",LEASE);buildLease(false);renderAll()}
+
+/* ----- admin list in Settings ----- */
+function renderAdmin(){
+  const box=$$("adminBox"); box.hidden=!(ME&&ME.admin&&LEASE); if(box.hidden) return;
+  const pl=$$("propList"); pl.innerHTML=""; const ps=props();
+  ps.forEach(p=>{
+    const r=document.createElement("div"); r.className="prow";
+    r.innerHTML=`<div class="picon" style="background:${esc(p.color||"#ffd600")};color:#111">${esc((p.name||"P").slice(0,2))}</div><div style="min-width:0"><div class="t">${esc(p.name||"Property")}</div><div class="m">${acres(p.boundary).toFixed(1)} acres · ${p.boundary.length} points</div><div class="mini"></div></div><div></div>`;
+    const mini=r.querySelector(".mini"), btn=(t,f,c)=>{const b=document.createElement("button");b.type="button";b.className="btn"+(c?" "+c:"");b.textContent=t;b.onclick=ev=>{ev.stopPropagation();f(b)};mini.appendChild(b)};
+    btn("Edit boundary",()=>startEdit(p));
+    btn("Rename / color",()=>openPropModal({id:p.id,name:p.name,color:p.color,ring:p.boundary,renameOnly:true}));
+    if(ps.length>1) btn("Remove",b=>{if(!b.dataset.sure){b.dataset.sure=1;b.textContent="Tap again to remove";return} removeProperty(p.id)},"danger");
+    r.onclick=()=>{collapse(true);setTimeout(()=>map.fitBounds(L.polygon(p.boundary).getBounds(),{padding:[40,40]}),260)};
+    pl.appendChild(r);
+  });
+  const sl=$$("standAdminList"); sl.innerHTML="";
+  const st=(LEASE.stands||[]).slice().sort((a,b)=>String(a.id).localeCompare(String(b.id),undefined,{numeric:true}));
+  if(!st.length) sl.innerHTML='<div class="note">No stands yet.</div>';
+  st.forEach(s=>{
+    const r=document.createElement("div"); r.className="prow";
+    const pn=ps.length>1?(ps.find(p=>p.id===s.propertyId)?.name||""):"";
+    r.innerHTML=`<div class="picon" style="background:var(--stand)">${esc(String(s.id).slice(0,3))}</div><div style="min-width:0"><div class="t">${esc(s.name)}</div><div class="m">${esc(s.type||"")}${pn?" · "+esc(pn):""}</div></div>`;
+    const b=document.createElement("button");b.type="button";b.className="btn";b.style.padding="6px 10px";b.textContent="Edit";b.onclick=ev=>{ev.stopPropagation();openStandEditor(s)};r.appendChild(b);
+    r.onclick=()=>{map.setView(s.ll,18);collapse(true)};
+    sl.appendChild(r);
+  });
+}
+$$("btnAddProp").onclick=()=>startEdit(null);
+$$("btnAddStand").onclick=()=>openStandEditor(null);
+
+/* ----- boundary editor: tap corners, or walk the line with GPS ----- */
+let ED=null;
+const edLayer=L.layerGroup().addTo(map);
+const vIcon=(cls)=>L.divIcon({className:"lbl",html:`<div class="${cls}"></div>`,iconSize:[16,16],iconAnchor:[8,8]});
+function startEdit(p){
+  if(!ME?.admin||ED) return;
+  if(meas) $$("measDone").click();
+  ED={id:p?.id||null,name:p?.name||"",color:p?.color||PROP_COLORS[props().length%PROP_COLORS.length],ring:p?p.boundary.map(x=>[+x[0],+x[1]]):[],start:p?JSON.stringify(p.boundary):"[]",
+      hist:[],sel:-1,mode:"tap",spacing:+S.get("edSpacing",10),maxAcc:+S.get("edAcc",15),acc:null,gap:null};
+  $$("edSpacing").value=ED.spacing; $$("edAcc").value=ED.maxAcc;
+  if(p&&propPolys[p.id]) propPolys[p.id].setStyle({opacity:.25,fillOpacity:0});
+  // taps on lines and areas add points instead of opening popups (stopEdit rebuilds them)
+  ["Boundary","Blowdown & scrape line","Roads","Neighbor lines","Public land (WMA)"].forEach(k=>ov[k].eachLayer(l=>l.unbindPopup&&l.unbindPopup()));
+  map.closePopup(); map.on("click",edClick); $$("editBar").hidden=false; collapse(true);
+  setTimeout(()=>{ if(p) map.fitBounds(L.polygon(p.boundary).getBounds(),{padding:[30,30]}); },260);
+  renderEd();
+  toast(p?"Drag points to fix the line. Tap a point to select it.":"Tap the map at each corner, or tap Walk it and walk the line");
+}
+function edPush(){ED.hist.push(JSON.stringify({ring:ED.ring,sel:ED.sel})); if(ED.hist.length>300) ED.hist.shift()}
+function edInsert(pt){ // after the selected point, or at the end
+  edPush();
+  if(ED.sel>=0){ED.ring.splice(ED.sel+1,0,pt);ED.sel++} else ED.ring.push(pt);
+}
+function edClick(e){ if(!ED||ED.mode!=="tap") return; edInsert([r6(e.latlng.lat),r6(e.latlng.lng)]); renderEd() }
+let edPoly=null;
+function renderEd(){
+  edLayer.clearLayers(); if(!ED) return;
+  const r=ED.ring;
+  edPoly=L.polygon(r,{color:ED.color,weight:3,fillOpacity:r.length>=3?.12:0,interactive:false,dashArray:ED.mode==="walk"?"6 5":null}).addTo(edLayer);
+  if(ED.mode==="walk"&&me&&r.length) L.polyline([ED.sel>=0?r[ED.sel]:r[r.length-1],me],{color:ED.color,weight:2,dashArray:"2 6",interactive:false}).addTo(edLayer);
+  if(ED.mode==="tap"&&r.length>=3&&r.length<250) r.forEach((a,i)=>{ // tap a faded dot to add a point mid-edge
+    const b=r[(i+1)%r.length];
+    L.marker([(a[0]+b[0])/2,(a[1]+b[1])/2],{icon:vIcon("vmid"),zIndexOffset:1100}).on("click",()=>{ED.sel=i;edInsert([r6((a[0]+b[0])/2),r6((a[1]+b[1])/2)]);renderEd()}).addTo(edLayer);
+  });
+  r.forEach((pt,i)=>{
+    if(ED.mode==="walk"&&i!==0&&i!==r.length-1&&i!==ED.sel) return; // keep it light while walking
+    const m=L.marker(pt,{icon:vIcon("vtx"+(i===ED.sel?" sel":"")+(i===0?" first":"")),draggable:ED.mode==="tap",autoPan:true,zIndexOffset:1200});
+    m.on("dragstart",()=>{edPush();ED.sel=i}).on("drag",e=>{const q=e.target.getLatLng();ED.ring[i]=[r6(q.lat),r6(q.lng)];edPoly.setLatLngs(ED.ring);edText()}).on("dragend",renderEd)
+     .on("click",()=>{ED.sel=ED.sel===i?-1:i;renderEd()}).addTo(edLayer);
+  });
+  edText();
+}
+function edText(){
+  const r=ED.ring, n=r.length, walk=ED.mode==="walk";
+  $$("edTxt").textContent=n<3?`${n} point${n===1?"":"s"} · need at least 3`:`${acres(r).toFixed(1)} acres · ${(ringLen(r)/1609.34).toFixed(2)} mi around · ${n} points`;
+  $$("edSub").textContent=walk
+    ?(ED.acc==null?"Waiting for GPS…":ED.acc>ED.maxAcc?`GPS is ±${ED.acc} m, too rough. Hold still or move into the open.`:`GPS ±${ED.acc} m · ${ED.gap!=null?`next point in ${Math.max(0,Math.round(ED.spacing-ED.gap))} m`:"ready"}. Keep the screen on.`)
+    :ED.sel>=0?`Point ${ED.sel+1} selected. Tap the map to add the next point after it, or drag it.`:n?"Tap the map to add a point. Drag a point to move it. Tap a faded dot to add one between.":"Tap the map at the first corner.";
+  $$("edTap").setAttribute("aria-pressed",!walk); $$("edWalk").setAttribute("aria-pressed",walk);
+  $$("edWalkOpts").hidden=!walk; $$("edCorner").hidden=!walk;
+  $$("edUndo").disabled=!ED.hist.length; $$("edDel").disabled=ED.sel<0;
+  placeBars();
+}
+function edWalkPos(c){
+  if(!ED||ED.mode!=="walk"||!c) return;
+  ED.acc=Math.round(c.accuracy); const p=[r6(c.latitude),r6(c.longitude)];
+  const last=ED.sel>=0?ED.ring[ED.sel]:ED.ring[ED.ring.length-1];
+  ED.gap=last?dist(last,p):null;
+  if(ED.acc<=ED.maxAcc&&(!last||ED.gap>=ED.spacing)){edInsert(p);ED.gap=0;renderEd()} else {renderEd()}
+}
+function edSetMode(m){
+  if(!ED) return; ED.mode=m;
+  if(m==="walk"){ if(watchId==null) startGps(); else {follow=true;updateLocateBtn()} if(me) map.setView(me,Math.max(map.getZoom(),18)); keepAwake(true); toast("Walk the line. A point drops every "+ED.spacing+" m. Tap Corner here at sharp turns."); }
+  else keepAwake(false);
+  renderEd();
+}
+$$("edTap").onclick=()=>edSetMode("tap");
+$$("edWalk").onclick=()=>edSetMode("walk");
+$$("edCorner").onclick=()=>{ if(!me){toast("No GPS fix yet");return} if(ED.acc!=null&&ED.acc>ED.maxAcc*1.5){toast(`GPS is ±${ED.acc} m right now. Wait a few seconds.`);return} edInsert([r6(me[0]),r6(me[1])]); renderEd(); toast("Corner added") };
+$$("edUndo").onclick=()=>{ if(!ED?.hist.length) return; const h=JSON.parse(ED.hist.pop()); ED.ring=h.ring; ED.sel=Math.min(h.sel,ED.ring.length-1); renderEd() };
+$$("edDel").onclick=()=>{ if(ED.sel<0) return; edPush(); ED.ring.splice(ED.sel,1); ED.sel=Math.min(ED.sel,ED.ring.length-1); if(!ED.ring.length) ED.sel=-1; renderEd() };
+$$("edSpacing").onchange=e=>{ED.spacing=+e.target.value;S.set("edSpacing",ED.spacing);edText()};
+$$("edAcc").onchange=e=>{ED.maxAcc=+e.target.value;S.set("edAcc",ED.maxAcc);edText()};
+$$("edDone").onclick=()=>{ if(ED.ring.length<3){toast("Add at least 3 points first");return} if(ED.mode==="walk") edSetMode("tap"); openPropModal({id:ED.id,name:ED.name,color:ED.color,ring:ED.ring}) };
+$$("edCancel").onclick=()=>{
+  const b=$$("edCancel"); const changed=JSON.stringify(ED.ring)!==ED.start;
+  if(changed&&!b.dataset.sure){b.dataset.sure=1;toast("Tap Cancel again to throw away your changes");setTimeout(()=>b.dataset.sure="",3000);return}
+  b.dataset.sure=""; stopEdit();
+};
+function stopEdit(){ ED=null; keepAwake(false); edLayer.clearLayers(); map.off("click",edClick); $$("editBar").hidden=true; buildLease(false); renderHunters() }
+
+/* ----- name / color, then save ----- */
+let PM=null;
+function openPropModal(o){
+  PM=o; $$("propTitle").textContent=o.renameOnly?"Rename property":o.id?"Save boundary":"New property";
+  $$("propName").value=o.name||(o.id?"":`Tract ${props().length+1}`);
+  const pc=$$("propColors"); pc.innerHTML="";
+  PROP_COLORS.forEach(c=>{const b=document.createElement("button");b.type="button";b.className="swatch";b.style.background=c;b.setAttribute("aria-pressed",c===(PM.color||PROP_COLORS[0]));b.setAttribute("aria-label","Color "+c);b.onclick=()=>{PM.color=c;[...pc.children].forEach(x=>x.setAttribute("aria-pressed",x===b))};pc.appendChild(b)});
+  $$("propInfo").textContent=`${acres(o.ring).toFixed(1)} acres · ${(ringLen(o.ring)/1609.34).toFixed(2)} mi around · ${o.ring.length} points`;
+  $$("propBack").textContent=o.renameOnly?"Cancel":"Back to the map";
+  $$("propModal").hidden=false;
+}
+$$("propBack").onclick=()=>{$$("propModal").hidden=true;PM=null};
+$$("propForm").onsubmit=e=>{
+  e.preventDefault(); if(!PM) return;
+  const id=PM.id||("P"+uid()), name=$$("propName").value.trim().slice(0,60)||"Property", color=PM.color||PROP_COLORS[0];
+  const ring=PM.ring.map(p=>[r6(p[0]),r6(p[1])]);
+  if(ring.length>2000){toast("Too many points. Use a bigger spacing.");return}
+  const list=props().map(p=>Object.assign({},p)), i=list.findIndex(p=>p.id===id), row={id,name,color,boundary:ring};
+  if(i>=0) list[i]=row; else list.push(row);
+  LEASE.properties=list; LEASE.boundary=list[0].boundary;
+  $$("propModal").hidden=true; PM=null; if(ED) stopEdit();
+  saveLease(); enqueue({action:"saveProperty",id,name,color,boundary:ring}); toast(`Saved ${name}`);
+};
+function removeProperty(id){
+  const list=props().filter(p=>p.id!==id); if(!list.length) return;
+  LEASE.properties=list; LEASE.boundary=list[0].boundary; LEASE.stands=(LEASE.stands||[]).filter(s=>s.propertyId!==id);
+  saveLease(); enqueue({action:"removeProperty",id}); toast("Property removed. It can be restored from the Properties tab in the sheet.");
+}
+
+/* ----- stands: add, move, edit ----- */
+const DIRS=["N","NNE","NE","ENE","E","ESE","SE","SSE","S","SSW","SW","WSW","W","WNW","NW","NNW"];
+let STE=null;
+function dirsFromWinds(w){ // which of the 16 compass points fall inside the stand's wind ranges
+  const on=new Set(); DIRS.forEach((_,i)=>{const c=i*22.5; if((w||[]).some(([a,b])=>b-a>=360||(c>=a&&c<=b)||(c+360>=a&&c+360<=b))) on.add(i)}); return on;
+}
+function windsFromDirs(on){
+  if(!on.size||on.size===16) return [[0,360]];
+  const out=[]; let start=[...Array(16).keys()].find(i=>!on.has(i)); // walk the circle from a gap
+  let run=null;
+  for(let k=1;k<=16;k++){const i=(start+k)%16;
+    if(on.has(i)){ if(!run) run=[i,i]; else run[1]=i; }
+    else if(run){ out.push(run); run=null; } }
+  if(run) out.push(run);
+  const res=[]; out.forEach(([a,b])=>{let lo=a*22.5-11.25, hi=(b<a?b+16:b)*22.5+11.25;
+    if(lo<0){res.push([Math.round(lo+360),360]);res.push([0,Math.round(hi)])}
+    else if(hi>360){res.push([Math.round(lo),360]);res.push([0,Math.round(hi-360)])}
+    else res.push([Math.round(lo),Math.round(hi)])});
+  return res;
+}
+function nextStandId(){let n=0;(LEASE?.stands||[]).forEach(s=>{const m=/^S(\d+)$/.exec(s.id);if(m)n=Math.max(n,+m[1])});return "S"+(n+1)}
+function propFor(ll){return props().find(p=>inPoly(ll,p.boundary))?.id||props()[0]?.id||""}
+function openStandEditor(s,keep){
+  if(!ME?.admin||!LEASE) return;
+  if(!keep){
+    const c=map.getCenter();
+    STE={orig:s,ll:s?s.ll.slice():(me?[r6(me[0]),r6(me[1])]:[r6(c.lat),r6(c.lng)]),dirs:dirsFromWinds(s?.winds||[[0,360]]),windsDirty:!s};
+    $$("stTitle").textContent=s?`Edit ${s.id}`:"New stand";
+    $$("stId").value=s?s.id:nextStandId(); $$("stId").readOnly=!!s;
+    $$("stName").value=s?.name||""; $$("stType").value=s?.type||"";
+    [["stAm","am",1],["stPm","pm",1],["stMid","mid",.4],["stRut","rutMid",.7]].forEach(([id,k,d])=>$$(id).value=Math.round(10*(s?(+s[k]||0):d)));
+    $$("stKids").checked=s?!!s.kids:true; $$("stWhy").value=s?.why||""; $$("stWalk").value=s?.walk||"";
+    $$("stDelete").hidden=!s; $$("stDelete").dataset.sure=""; $$("stDelete").textContent="Delete stand";
+    const sel=$$("stProp"); sel.innerHTML=""; props().forEach(p=>{const o=document.createElement("option");o.value=p.id;o.textContent=p.name||p.id;sel.appendChild(o)});
+    sel.value=s?.propertyId||propFor(STE.ll); $$("stPropWrap").hidden=props().length<2;
+  }
+  $$("stMsg").textContent=""; renderStandForm(); $$("standModal").hidden=false;
+}
+function renderStandForm(){
+  $$("stWhere").textContent=`${STE.ll[0].toFixed(6)}, ${STE.ll[1].toFixed(6)}${me?` · ${yd(dist(me,STE.ll))} yd from you`:""}${props().some(p=>inPoly(STE.ll,p.boundary))?"":" · outside the boundary"}`;
+  const w=$$("stWinds"); w.innerHTML="";
+  DIRS.forEach((d,i)=>{const b=document.createElement("button");b.type="button";b.textContent=d;b.setAttribute("aria-pressed",STE.dirs.has(i));b.onclick=()=>{STE.dirs.has(i)?STE.dirs.delete(i):STE.dirs.add(i);STE.windsDirty=true;renderStandForm()};w.appendChild(b)});
+  [["stAm","stAmV"],["stPm","stPmV"],["stMid","stMidV"],["stRut","stRutV"]].forEach(([i,v])=>$$(v).textContent=$$(i).value);
+}
+["stAm","stPm","stMid","stRut"].forEach(i=>$$(i).oninput=renderStandForm);
+$$("stAny").onclick=()=>{STE.dirs=new Set(DIRS.map((_,i)=>i));STE.windsDirty=true;renderStandForm()};
+$$("stNone").onclick=()=>{STE.dirs=new Set();STE.windsDirty=true;renderStandForm()};
+$$("stGps").onclick=()=>{ if(!me){startGps();toast("Getting your location… tap again in a moment");return} STE.ll=[r6(me[0]),r6(me[1])]; if(props().length>1)$$("stProp").value=propFor(STE.ll); renderStandForm(); toast("Moved to where you're standing") };
+$$("stPick").onclick=()=>{ $$("standModal").hidden=true; collapse(true); $$("cross").classList.add("show"); $$("pickBar").hidden=false; setTimeout(()=>{ // put the stand's current spot under the crosshair
+    map.setView(STE.ll,Math.max(map.getZoom(),18),{animate:false});
+    const b=$$("cross").getBoundingClientRect(), ctr=map.getSize().divideBy(2);
+    map.panBy([ctr.x-(b.left+b.width/2),ctr.y-(b.top+b.height/2)],{animate:false})},260) };
+$$("pickUse").onclick=()=>{ const c=crossLL(); STE.ll=[r6(c.lat),r6(c.lng)]; if(props().length>1)$$("stProp").value=propFor(STE.ll); $$("pickBar").hidden=true; $$("cross").classList.remove("show"); openStandEditor(null,true) };
+$$("pickCancel").onclick=()=>{ $$("pickBar").hidden=true; $$("cross").classList.remove("show"); openStandEditor(null,true) };
+$$("standForm").onsubmit=e=>{
+  e.preventDefault();
+  const id=$$("stId").value.trim().toUpperCase().replace(/\s+/g,"");
+  if(!/^[A-Z0-9_-]{1,12}$/.test(id)){$$("stMsg").textContent="Map label: letters and numbers only (like S5), up to 12.";return}
+  if(!STE.orig&&(LEASE.stands||[]).some(s=>s.id===id)){$$("stMsg").textContent=`${id} is already used. Pick another label.`;return}
+  const st={id,propertyId:$$("stProp").value||propFor(STE.ll),name:$$("stName").value.trim().slice(0,60)||id,type:$$("stType").value.trim().slice(0,40),ll:STE.ll.slice(),
+    winds:STE.windsDirty||!STE.orig?windsFromDirs(STE.dirs):STE.orig.winds,am:+$$("stAm").value/10,pm:+$$("stPm").value/10,mid:+$$("stMid").value/10,rutMid:+$$("stRut").value/10,
+    kids:$$("stKids").checked,why:$$("stWhy").value.trim().slice(0,300),walk:$$("stWalk").value.trim().slice(0,300)};
+  const list=(LEASE.stands||[]).slice(), i=list.findIndex(s=>s.id===id); if(i>=0) list[i]=st; else list.push(st); LEASE.stands=list;
+  $$("standModal").hidden=true; saveLease();
+  const {ll,...rest}=st; enqueue(Object.assign({action:"saveStand",lat:ll[0],lon:ll[1]},rest)); toast(`Saved ${id} ${st.name}`);
+};
+$$("stDelete").onclick=()=>{
+  const b=$$("stDelete"); if(!b.dataset.sure){b.dataset.sure=1;b.textContent="Tap again to delete";return}
+  const id=STE.orig.id; LEASE.stands=(LEASE.stands||[]).filter(s=>s.id!==id); $$("standModal").hidden=true; delete standMarkers[id];
+  saveLease(); enqueue({action:"deleteStand",id}); toast(`Deleted ${id}`);
+};
+
 /* ---------- boot ---------- */
-function renderAll(){renderChips();renderPlan();drawCones();renderPins();renderLayers();renderHunters();renderClubData();renderLight()}
+function renderAll(){renderChips();renderPlan();drawCones();renderPins();renderLayers();renderHunters();renderClubData();renderLight();renderAdmin()}
 buildLease(true);
 renderAll();
 loadWeather();
