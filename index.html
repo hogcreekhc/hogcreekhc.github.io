@@ -183,6 +183,8 @@ label.f{display:grid;gap:4px;font:500 12px var(--mono);color:var(--muted);text-t
 .winds button{padding:7px 0;border:1px solid var(--line);background:var(--panel2);border-radius:8px;font:600 12px var(--mono);cursor:pointer}
 .winds button[aria-pressed="true"]{background:#1f5c38;border-color:var(--good)}
 input[type=range]{padding:0;accent-color:var(--accent)}
+.conebar{margin:2px 0 10px}.conebar .ct{display:flex;align-items:center;justify-content:space-between;gap:8px;font-size:14px;margin-bottom:2px}
+.conebar input{width:100%}.conebar .btn.sm{padding:4px 12px;font-size:13px;width:auto;margin:0}
 </style>
 </head>
 <body>
@@ -220,6 +222,7 @@ input[type=range]{padding:0;accent-color:var(--accent)}
   <div class="body">
     <section class="pane on" id="p-today">
       <div class="days" id="days"></div>
+      <div class="conebar" id="coneBar"><div class="ct"><span id="coneTxt">Scent cones</span><button class="btn sm" id="coneNow" type="button">Now</button></div><input type="range" id="coneHr" min="0" max="12" step="1" aria-label="Hour for scent cones"></div>
       <div class="facts" id="facts"></div>
       <div class="sec">Best stands</div>
       <div id="picks" style="display:grid;gap:8px"></div>
@@ -695,7 +698,7 @@ function renderPlan(){
   for(let i=0;i<7;i++){const d=dayDate(i);const b=document.createElement("button");b.setAttribute("aria-pressed",i===selDay);
     let top=""; if(WX){const p=planDay(d); if(p.res[0]?.best) top=`${p.res[0].s.id} · ${p.res[0].best.score}`;}
     b.innerHTML=`<span class="d">${i===0?"Today":d.toLocaleDateString("en-US",{timeZone:CLUB.TZ,weekday:"short"})}</span><span class="s">${d.toLocaleDateString("en-US",{timeZone:CLUB.TZ,month:"numeric",day:"numeric"})}</span><span class="s">${top||"&nbsp;"}</span>`;
-    b.onclick=()=>{selDay=i;renderPlan();drawCones()}; days.appendChild(b)}
+    b.onclick=()=>{selDay=i;coneT=null;renderPlan();drawCones()}; days.appendChild(b)}
   const day=dayDate(selDay); const moon=moonInfo(day); const sun=sunFor(day);
   const facts=document.getElementById("facts");
   const majors=moon.periods.filter(p=>p[2]==="Major").map(p=>`${fmtT(p[0])}–${fmtT(p[1])}`).join(", ");
@@ -751,11 +754,26 @@ function renderChips(){
     document.getElementById("windTxt").textContent=card(d);
     document.getElementById("windSp").textContent=Math.round(sp)+" mph";}
 }
+// Hour the scent cones show. null = default: now for today, 2 h before sunset on other days.
+let coneT=null;
+function coneTime(){ if(coneT) return coneT; if(selDay===0) return new Date(); const s=sunFor(dayDate(selDay)); return new Date(+s.set-2*3600e3) }
+function coneRange(){ // whole hours from an hour before sunrise to an hour after sunset
+  const s=sunFor(dayDate(selDay)); const a=new Date(+s.rise-3600e3); a.setMinutes(0,0,0);
+  const n=Math.ceil((+s.set+3600e3-a)/3600e3); return {a,n};
+}
+const hrTxt=t=>t.toLocaleTimeString("en-US",{timeZone:CLUB.TZ,hour:"numeric"});
+function renderConeBar(){
+  const sl=document.getElementById("coneHr"), t=coneTime(), {a,n}=coneRange();
+  sl.max=n; sl.value=Math.max(0,Math.min(n,Math.round((+t-a)/3600e3)));
+  const i=WX?wxIndex(t):-1, live=!coneT&&selDay===0;
+  document.getElementById("coneTxt").innerHTML=`Scent cones · <b>${live?"now":hrTxt(t)}</b>${i>=0?` · ${card(WX.hourly.wind_direction_10m[i])} ${Math.round(WX.hourly.wind_speed_10m[i])} mph`:""}`;
+  document.getElementById("coneNow").hidden=live;
+}
+document.getElementById("coneHr").oninput=e=>{const {a}=coneRange(); coneT=new Date(+a+e.target.value*3600e3); drawCones()};
+document.getElementById("coneNow").onclick=()=>{coneT=null; if(selDay!==0){selDay=0; renderPlan()} drawCones()};
 function drawCones(){
-  coneLayer.clearLayers(); if(!WX||!LEASE) return;
-  // use wind at the selected day's best window midpoint, or now for today
-  let t=new Date(); if(selDay>0){const d=dayDate(selDay); const s=sunFor(d); t=new Date(+s.set-2*3600e3)}
-  const i=wxIndex(t); if(i<0) return;
+  coneLayer.clearLayers(); renderConeBar(); if(!WX||!LEASE) return;
+  const i=wxIndex(coneTime()); if(i<0) return;
   const dir=WX.hourly.wind_direction_10m[i]; const to=(dir+180)%360;
   LEASE.stands.forEach(s=>{
     const pts=[s.ll]; for(let a=-22;a<=22;a+=4) pts.push(dest(s.ll,to+a,180));
