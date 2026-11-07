@@ -114,7 +114,12 @@ label.f{display:grid;gap:4px;font:500 12px var(--mono);color:var(--muted);text-t
 .status{font:12px var(--mono);color:var(--muted)}
 .layers{display:grid;gap:8px}
 .layers label{display:flex;gap:10px;align-items:center;padding:8px 10px;background:var(--panel2);border-radius:10px;cursor:pointer}
-.layers input{width:auto}
+.layers label{justify-content:space-between}
+.layers input.sw{-webkit-appearance:none;appearance:none;flex:none;width:46px;height:28px;margin:0;padding:0;border:0;border-radius:14px;background:#4a534a;position:relative;cursor:pointer;transition:background .2s}
+.layers input.sw::after{content:"";position:absolute;top:3px;left:3px;width:22px;height:22px;border-radius:50%;background:#fff;box-shadow:0 1px 3px rgba(0,0,0,.45);transition:transform .2s}
+.layers input.sw:checked{background:var(--accent)}
+.layers input.sw:checked::after{transform:translateX(18px)}
+.layers input.sw:focus-visible{outline:2px solid #fff;outline-offset:2px}
 
 /* modal */
 .modal{position:fixed;inset:0;z-index:2000;background:rgba(0,0,0,.55);display:flex;align-items:flex-end;justify-content:center}
@@ -548,8 +553,10 @@ const mateLayer=L.layerGroup(); ov["Members sharing location"]=mateLayer;
 const taskLayer=L.layerGroup(); ov["Work list"]=taskLayer;
 const harvLayer=L.layerGroup(); ov["Harvests"]=harvLayer;
 const navLayer=L.layerGroup().addTo(map), measLayer=L.layerGroup().addTo(map), bloodLayer=L.layerGroup().addTo(map);
-const defaultsOn=["Public land (WMA)","Neighbor lines","Members sharing location","Work list","Harvests","Hunters","10 ft contours","Boundary","Scrape line","Roads","Camp","Stands","Club pins","Scent cones","My track"];
-const ovOn=S.get("ov",defaultsOn).map(n=>({"Blowdown & scrape line":"Scrape line","Slope (flat / steep)":SLOPE})[n]||n);
+const defaultsOn=["Public land (WMA)","Neighbor lines","Members sharing location","Work list","Harvests","Hunters","Boundary","Scrape line","Roads","Camp","Stands","Club pins","Scent cones","My track"];
+let ovOn=S.get("ov",defaultsOn).map(n=>({"Blowdown & scrape line":"Scrape line","Slope (flat / steep)":SLOPE})[n]||n);
+// one time: contours used to start on over the aerial; turn them off once (members can switch them back on)
+if(S.get("ovV",0)<1){ ovOn=ovOn.filter(n=>n!=="10 ft contours"); S.set("ov",ovOn); S.set("ovV",1); }
 Object.entries(ov).forEach(([n,l])=>{if(ovOn.includes(n)) l.addTo(map)});
 function fitLease(){if(!LEASE)return;const h=document.body.classList.contains("min")?70:Math.round(innerHeight*.44)+10;map.fitBounds(leaseBounds(),{paddingTopLeft:[20,110],paddingBottomRight:[70,h]})}
 // All of the club's properties. Older backends only sent one boundary.
@@ -1107,9 +1114,12 @@ selectTab(S.get("tab","today"));
 /* ---------- layers pane ---------- */
 function renderLayers(){
   const bl=document.getElementById("baseLayers"); bl.innerHTML="";
-  Object.keys(bases).forEach(n=>{const l=document.createElement("label");l.innerHTML=`<input type="radio" name="base" ${n===baseName?"checked":""}> ${n}`;l.querySelector("input").onchange=()=>{map.removeLayer(bases[baseName]);baseName=n;bases[n].addTo(map);bases[n].bringToBack();S.set("base",n)};bl.appendChild(l)});
+  Object.keys(bases).forEach(n=>{const l=document.createElement("label");l.innerHTML=`<span>${n}</span><input type="checkbox" class="sw" role="switch" ${n===baseName?"checked":""}>`;l.querySelector("input").onchange=e=>{
+    if(!e.target.checked){ // a base map has to be showing; switching the current one off goes back to Aerial
+      if(n==="Aerial"){e.target.checked=true;toast("Switch on Topo or LiDAR terrain to change the base map");return} }
+    const next=e.target.checked?n:"Aerial"; map.removeLayer(bases[baseName]); baseName=next; bases[next].addTo(map); bases[next].bringToBack(); S.set("base",next); renderLayers()};bl.appendChild(l)});
   const ol=document.getElementById("overLayers"); ol.innerHTML="";
-  Object.keys(ov).forEach(n=>{const l=document.createElement("label");l.innerHTML=`<input type="checkbox" ${map.hasLayer(ov[n])?"checked":""}> ${n}`;l.querySelector("input").onchange=e=>{e.target.checked?ov[n].addTo(map):map.removeLayer(ov[n]);S.set("ov",Object.keys(ov).filter(k=>map.hasLayer(ov[k])))};ol.appendChild(l)});
+  Object.keys(ov).forEach(n=>{const l=document.createElement("label");l.innerHTML=`<span>${n}</span><input type="checkbox" class="sw" role="switch" ${map.hasLayer(ov[n])?"checked":""}>`;l.querySelector("input").onchange=e=>{e.target.checked?ov[n].addTo(map):map.removeLayer(ov[n]);S.set("ov",Object.keys(ov).filter(k=>map.hasLayer(ov[k])))};ol.appendChild(l)});
 }
 document.getElementById("btnFit").onclick=()=>{collapse(true);setTimeout(fitLease,260)};
 document.getElementById("btnClearTrack").onclick=()=>{track={day:dayKey(new Date()),pts:[]};trackLine.setLatLngs([]);S.set("track",track);toast("Track cleared")};
