@@ -137,6 +137,7 @@ label.f{display:grid;gap:4px;font:500 12px var(--mono);color:var(--muted);text-t
 @keyframes recblink{50%{opacity:.25}}
 #trackList .trk{display:grid;gap:4px}
 #trackList .trk .m{color:var(--muted);font-size:12.5px}
+.tr-ar{width:18px;height:18px;pointer-events:none}.tr-ar svg{display:block}
 .navarrow{width:44px;height:44px;border-radius:50%;background:#1d4f86;display:grid;place-items:center;flex:none;transition:transform .3s}
 .navt{font:700 19px var(--display);letter-spacing:.02em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .navs{font:12.5px var(--mono);color:var(--muted)}
@@ -294,6 +295,8 @@ input[type=range]{padding:0;accent-color:var(--accent)}
       <div class="sec">Tools</div>
       <div class="row"><button class="btn" id="btnMeasure">Measure distance / area</button><button class="btn" id="btnBlood">Start a blood trail</button></div>
       <div class="row"><button class="btn" id="btnFit">Zoom to property</button><button class="btn" id="btnTrack">Start a track</button></div>
+      <div class="row"><button class="btn" id="btnTrailDraw">Draw a deer trail</button></div>
+      <p class="note">To map a deer trail by walking it, use Start a track, then choose "Save as deer trail" when you stop.</p>
       <div class="sec">Saved tracks <span style="text-transform:none;letter-spacing:0">(on this phone)</span></div>
       <div class="layers" id="trackList"></div>
       <div class="row"><button class="btn danger" id="btnClearTracks" hidden>Clear all tracks</button></div>
@@ -433,6 +436,11 @@ input[type=range]{padding:0;accent-color:var(--accent)}
   <button class="btn primary" id="recStop">Stop</button>
 </div>
 
+<div class="toolbar" id="trailBar" hidden>
+  <div style="flex:1;min-width:0"><div class="navt" id="tdTxt">Deer trail</div><div class="navs" id="tdSub">Tap the map along the trail, in order</div></div>
+  <button class="btn" id="tdUndo">Undo</button><button class="btn primary" id="tdDone">Done</button><button class="btn" id="tdCancel">Cancel</button>
+</div>
+
 <div class="toolbar" id="measureBar" hidden>
   <div style="flex:1;min-width:0"><div class="navt" id="measTxt">Tap the map to add points</div><div class="navs" id="measSub">2 points for distance, 3 or more for area</div></div>
   <button class="btn" id="measUndo">Undo</button><button class="btn" id="measDone">Done</button>
@@ -468,7 +476,25 @@ input[type=range]{padding:0;accent-color:var(--accent)}
     <h2>Save track</h2>
     <label class="f">Name<input id="trkName" maxlength="60" required></label>
     <div class="status" id="trkInfo"></div>
-    <div class="row"><button class="btn primary" type="submit">Save track</button><button class="btn danger" type="button" id="trkDiscard">Discard</button></div>
+    <div class="row"><button class="btn primary" type="submit">Save track</button><button class="btn" type="button" id="trkAsTrail">Save as deer trail</button></div>
+    <div class="row"><button class="btn danger" type="button" id="trkDiscard">Discard</button></div>
+  </form>
+</div>
+
+<div class="modal" id="trailModal" hidden>
+  <form class="card" id="trailForm">
+    <h2>Deer trail</h2>
+    <div class="status" id="trInfo"></div>
+    <label class="f">Name<input id="trName" maxlength="60" placeholder="Creek crossing trail"></label>
+    <div class="sec">How much use</div>
+    <div class="row" id="trUse"></div>
+    <label class="f">Which way do deer travel it<select id="trDir">
+      <option value="">Not sure</option><option value="fwd">The way I drew or walked it</option><option value="back">Opposite the way I drew it</option><option value="both">Both ways</option>
+    </select></label>
+    <label class="f">Date<input type="date" id="trDate"></label>
+    <label class="f">Note<textarea id="trNote" rows="2" maxlength="300" placeholder="Fresh tracks, crosses the creek at the big oak"></textarea></label>
+    <p class="note">The whole club sees deer trails.</p>
+    <div class="row"><button class="btn primary" type="submit">Save trail</button><button class="btn" type="button" id="trBack">Back</button></div>
   </form>
 </div>
 
@@ -597,16 +623,18 @@ const pinLayer=L.layerGroup(); ov["Club pins"]=pinLayer;
 const coneLayer=L.layerGroup(); ov["Scent cones"]=coneLayer;
 const trackLayer=L.layerGroup(); ov["Tracks"]=trackLayer;
 const routeLayer=L.layerGroup(); ov["Walk-in routes"]=routeLayer;
+const trailLayer=L.layerGroup(); ov["Deer trails"]=trailLayer;
 const hunterLayer=L.layerGroup(); ov["Hunters"]=hunterLayer;
 const mateLayer=L.layerGroup(); ov["Members sharing location"]=mateLayer;
 const taskLayer=L.layerGroup(); ov["Work list"]=taskLayer;
 const harvLayer=L.layerGroup(); ov["Harvests"]=harvLayer;
 const navLayer=L.layerGroup().addTo(map), measLayer=L.layerGroup().addTo(map), bloodLayer=L.layerGroup().addTo(map);
-const defaultsOn=["Public land (WMA)","Neighbor lines","Members sharing location","Work list","Harvests","Hunters","Boundary","Scrape line","Roads","Camp","Stands","Club pins","Scent cones","Tracks","Walk-in routes"];
+const defaultsOn=["Public land (WMA)","Neighbor lines","Members sharing location","Work list","Harvests","Hunters","Boundary","Scrape line","Roads","Camp","Stands","Club pins","Scent cones","Tracks","Walk-in routes","Deer trails"];
 let ovOn=S.get("ov",defaultsOn).map(n=>({"Blowdown & scrape line":"Scrape line","Slope (flat / steep)":SLOPE,"My track":"Tracks"})[n]||n);
 // one time: contours used to start on over the aerial; turn them off once (members can switch them back on)
 if(S.get("ovV",0)<1){ ovOn=ovOn.filter(n=>n!=="10 ft contours"); S.set("ov",ovOn); S.set("ovV",1); }
 if(S.get("ovV",0)<2){ if(!ovOn.includes("Walk-in routes")) ovOn.push("Walk-in routes"); S.set("ov",ovOn); S.set("ovV",2); }
+if(S.get("ovV",0)<3){ if(!ovOn.includes("Deer trails")) ovOn.push("Deer trails"); S.set("ov",ovOn); S.set("ovV",3); }
 Object.entries(ov).forEach(([n,l])=>{if(ovOn.includes(n)) l.addTo(map)});
 function fitLease(){if(!LEASE)return;const h=document.body.classList.contains("min")?70:Math.round(innerHeight*.44)+10;map.fitBounds(leaseBounds(),{paddingTopLeft:[20,110],paddingBottomRight:[70,h]})}
 // All of the club's properties. Older backends only sent one boundary.
@@ -1024,7 +1052,7 @@ function applyServer(j){
   if(!QUEUE.length){
     const keepPhotos=Object.fromEntries(HARV.filter(h=>h._photo).map(h=>[h.id,h._photo]));
     if(j.settings){CSET=j.settings;S.set("cset",CSET)}
-    RES=j.reservations||[]; SITS=j.sits||[]; TASKS=j.tasks||[]; MEMBERS=j.members||[];
+    RES=j.reservations||[]; SITS=j.sits||[]; TASKS=j.tasks||[]; MEMBERS=j.members||[]; if(j.trails) TRAILS=j.trails;
     HARV=(j.harvests||[]).map(h=>(!h.photoId&&keepPhotos[h.id])?Object.assign(h,{_photo:keepPhotos[h.id]}):h);
     saveData();
   }
@@ -1036,7 +1064,7 @@ function applyServer(j){
   if(fresh) renderAll(); else renderAdmin();
 }
 function signOut(silent){
-  cfg.code=""; S.set("cfg",cfg); ME=null; LEASE=null; PINS=[]; QUEUE=[]; CHECKINS=[]; RES=[]; SITS=[]; TASKS=[]; HARV=[]; MEMBERS=[];
+  cfg.code=""; S.set("cfg",cfg); ME=null; LEASE=null; PINS=[]; QUEUE=[]; CHECKINS=[]; RES=[]; SITS=[]; TASKS=[]; HARV=[]; MEMBERS=[]; TRAILS=[];
   ["me","lease","pins","queue","track","checkins","res","sits","tasks","harv","members"].forEach(k=>S.set(k,null)); hunterLayer.clearLayers();
   stopNav(); taskLayer.clearLayers(); harvLayer.clearLayers(); LOCS=[]; S.set("locs",null); mateLayer.clearLayers(); shareOn=false; S.set("share",false);
   buildLease(false); pinLayer.clearLayers(); coneLayer.clearLayers();
@@ -1253,8 +1281,8 @@ if(S.get("offlineAt",0)){document.getElementById("offlineStatus").textContent="L
 /* ================= club data: reservations, sits, tasks, harvests ================= */
 let LOCS=S.get("locs",[]);
 let CSET=Object.assign({reservations:"on",on_property_only:"yes",days_ahead:1,morning_opens_minutes_before:null,morning_no_show_minutes:30,evening_no_show_minutes:30},S.get("cset",{}));
-let RES=S.get("res",[]), SITS=S.get("sits",[]), TASKS=S.get("tasks",[]), HARV=S.get("harv",[]), MEMBERS=S.get("members",[]);
-function saveData(){S.set("res",RES);S.set("sits",SITS);S.set("tasks",TASKS);S.set("harv",HARV);S.set("members",MEMBERS)}
+let RES=S.get("res",[]), SITS=S.get("sits",[]), TASKS=S.get("tasks",[]), HARV=S.get("harv",[]), MEMBERS=S.get("members",[]), TRAILS=S.get("trails",[]);
+function saveData(){S.set("res",RES);S.set("sits",SITS);S.set("tasks",TASKS);S.set("harv",HARV);S.set("members",MEMBERS);S.set("trails",TRAILS)}
 const uid=()=>Date.now().toString(36)+Math.random().toString(36).slice(2,7);
 const $$=id=>document.getElementById(id);
 function showModal(id){$$(id).hidden=false}
@@ -1278,7 +1306,7 @@ function chips(el,items,cur,onPick){
 const localISO=(date,hm)=>new Date(`${date}T${hm||"00:00"}`).toISOString();
 const hm=d=>{const x=new Date(d);return String(x.getHours()).padStart(2,"0")+":"+String(x.getMinutes()).padStart(2,"0")};
 const ymd=d=>dayKey(new Date(d));
-function renderClubData(){renderRes();renderLog();renderTasks();renderTaskLayer();renderHarvLayer()}
+function renderClubData(){renderRes();renderLog();renderTasks();renderTaskLayer();renderHarvLayer();renderTrails()}
 
 /* ---------- legal light ---------- */
 function renderLight(){
@@ -1356,6 +1384,7 @@ $$("trackForm").onsubmit=e=>{
   const t={id:Date.now().toString(36),name:$$("trkName").value.trim().slice(0,60)||"Track",date:new Date(REC.start).toISOString(),pts:REC.pts.map(q=>[r6(q[0]),r6(q[1])]),shown:false};
   TRACKS.unshift(t); S.set("tracks",TRACKS); endRec(); renderTracks(); toast(`Saved "${t.name}". It's under Map > Saved tracks.`);
 };
+$$("trkAsTrail").onclick=()=>{ if(!REC) return; const pts=REC.pts.map(q=>[r6(q[0]),r6(q[1])]); openTrail(pts,"walked",()=>endRec()); };
 $$("trkDiscard").onclick=()=>{const b=$$("trkDiscard"); if(!b.dataset.sure){b.dataset.sure=1;b.textContent="Tap again to discard";return} endRec(); toast("Track discarded")};
 function saveTracks(){S.set("tracks",TRACKS);renderTracks()}
 function renderTracks(){
@@ -1370,6 +1399,7 @@ function renderTracks(){
     w.querySelector("input").onchange=e=>{t.shown=e.target.checked; if(t.shown&&!map.hasLayer(trackLayer)) trackLayer.addTo(map); saveTracks()};
     const row=w.querySelector(".mini"), btn=(txt,fn,cls)=>{const b=document.createElement("button");b.type="button";b.className="btn"+(cls?" "+cls:"");b.textContent=txt;b.onclick=()=>fn(b);row.appendChild(b)};
     btn("Show on map",()=>{t.shown=true;if(!map.hasLayer(trackLayer))trackLayer.addTo(map);saveTracks();collapse(true);setTimeout(()=>map.fitBounds(L.latLngBounds(t.pts).pad(.25)),260)});
+    if(ME) btn("Make deer trail…",()=>openTrail(t.pts.slice(),"walked"));
     if(ME?.admin&&LEASE?.stands?.length) btn("Walk-in route…",()=>openRoute(t));
     btn("Delete",b=>{if(!b.dataset.sure){b.dataset.sure=1;b.textContent="Tap again to delete";return} TRACKS=TRACKS.filter(x=>x.id!==t.id);saveTracks();toast("Track deleted")},"danger");
     box.appendChild(w);
@@ -1377,6 +1407,68 @@ function renderTracks(){
   $$("btnClearTracks").hidden=!TRACKS.length; $$("btnClearTracks").dataset.sure=""; $$("btnClearTracks").textContent="Clear all tracks";
 }
 $$("btnClearTracks").onclick=()=>{const b=$$("btnClearTracks"); if(!b.dataset.sure){b.dataset.sure=1;b.textContent="Tap again to delete every saved track";return} TRACKS=[];saveTracks();toast("All tracks cleared")};
+
+/* ---------- deer trails: shared with the club, colored by use ---------- */
+const TRAIL_USE={Heavy:{c:"#ff4d1a",w:5},Moderate:{c:"#ffa726",w:4},Light:{c:"#ffe082",w:3}};
+const TRAIL_DIR={"":"Direction not sure",fwd:"Deer travel the way it was drawn",back:"Deer travel opposite the way it was drawn",both:"Deer travel both ways"};
+let trailDraft=null, trailUse="Moderate", trailAfterSave=null;
+function openTrail(pts,how,after){
+  if(!ME){openSignIn();return}
+  trailDraft=pts; trailAfterSave=after||null; trailUse="Moderate";
+  $$("trInfo").textContent=`${yd(lineLen(pts))} yd, ${how}`;
+  $$("trName").value=""; $$("trDir").value=""; $$("trNote").value=""; $$("trDate").value=dayKey(new Date());
+  renderTrailUse(); $$("trackModal").hidden=true; $$("trailModal").hidden=false;
+}
+function renderTrailUse(){
+  const box=$$("trUse"); box.innerHTML="";
+  Object.keys(TRAIL_USE).forEach(u=>{const b=document.createElement("button");b.type="button";b.className="btn"+(u===trailUse?" primary":"");b.innerHTML=`<b style="color:${u===trailUse?"inherit":TRAIL_USE[u].c}">━</b> ${u}`;b.onclick=()=>{trailUse=u;renderTrailUse()};box.appendChild(b)});
+}
+$$("trBack").onclick=()=>{$$("trailModal").hidden=true; if(REC&&trailAfterSave) $$("trackModal").hidden=false; else if(tdPts){$$("trailBar").hidden=false;map.on("click",onTdClick)}};
+$$("trailForm").onsubmit=e=>{
+  e.preventDefault(); if(!trailDraft) return;
+  const t={id:"tr"+Date.now().toString(36)+Math.random().toString(36).slice(2,5),name:$$("trName").value.trim().slice(0,60)||"Deer trail",use:trailUse,dir:$$("trDir").value,
+    date:$$("trDate").value||dayKey(new Date()),by:ME.name,note:$$("trNote").value.trim().slice(0,300),pts:trailDraft,_pending:true};
+  TRAILS.push(t); $$("trailModal").hidden=true; trailDraft=null; endTrailDraw();
+  if(trailAfterSave){trailAfterSave();trailAfterSave=null}
+  if(!map.hasLayer(trailLayer)) trailLayer.addTo(map);
+  const {_pending,...send}=t; enqueue(Object.assign({action:"addTrail"},send)); toast(`Saved deer trail "${t.name}"`);
+};
+// arrows every ~70 m along a line, pointing the way deer travel
+function trailArrows(pts,back){
+  const out=[]; let acc=35;
+  for(let i=1;i<pts.length;i++){const a=pts[i-1],b=pts[i],seg=dist(a,b); let at=acc;
+    while(at<seg){const f=at/seg; out.push({ll:[a[0]+(b[0]-a[0])*f,a[1]+(b[1]-a[1])*f],br:(bearing(a,b)+(back?180:0))%360}); at+=70}
+    acc=at-seg}
+  return out;
+}
+function renderTrails(){
+  trailLayer.clearLayers();
+  TRAILS.forEach(t=>{
+    if(!Array.isArray(t.pts)||t.pts.length<2) return;
+    const u=TRAIL_USE[t.use]||TRAIL_USE.Moderate;
+    L.polyline(t.pts,{color:"#000",weight:u.w+3,opacity:.4,interactive:false}).addTo(trailLayer);
+    L.polyline(t.pts,{color:u.c,weight:u.w,opacity:.95}).bindPopup(()=>{
+      const d=document.createElement("div");
+      d.innerHTML=`<h4>${esc(t.name)}</h4><div><b style="color:${u.c}">${esc(t.use)} use</b> · ${yd(lineLen(t.pts))} yd</div><div class="pop-m">${esc(TRAIL_DIR[t.dir]||TRAIL_DIR[""])}</div>${t.note?`<div style="margin-top:4px">${esc(t.note)}</div>`:""}<div class="pop-m">${esc(t.by||"Someone")} · ${esc(t.date)}${t._pending?" · waiting to upload":""}</div>`;
+      if(canEdit(t)){const b=document.createElement("button");b.className="btn danger";b.style.marginTop="8px";b.textContent="Delete trail";
+        b.onclick=()=>{if(!b.dataset.sure){b.dataset.sure=1;b.textContent="Tap again to delete";return} TRAILS=TRAILS.filter(x=>x.id!==t.id); enqueue({action:"deleteTrail",id:t.id}); map.closePopup(); toast("Trail deleted")};d.appendChild(b)}
+      return d}).addTo(trailLayer);
+    if(t.dir==="fwd"||t.dir==="back"||t.dir==="both"){
+      const ar=trailArrows(t.pts,t.dir==="back"); if(t.dir==="both") trailArrows(t.pts,true).forEach((q,i)=>{if(i%2)ar.push(q)});
+      ar.forEach(q=>L.marker(q.ll,{icon:L.divIcon({className:"lbl",html:`<div class="tr-ar" style="transform:rotate(${q.br}deg)"><svg viewBox="0 0 18 18" width="18" height="18"><path d="M9 1 L16 15 L9 11 L2 15 Z" fill="${u.c}" stroke="#000" stroke-width="1.2" stroke-linejoin="round"/></svg></div>`,iconSize:[18,18],iconAnchor:[9,9]}),interactive:false}).addTo(trailLayer));
+    }
+  });
+}
+// draw a trail by tapping points
+let tdPts=null; const tdLine=L.polyline([],{color:"#ffa726",weight:4,dashArray:"6 6",interactive:false});
+function startTrailDraw(){ if(!ME){openSignIn();return} tdPts=[]; tdLine.setLatLngs([]).addTo(map); $$("trailBar").hidden=false; map.on("click",onTdClick); collapse(true); renderTd(); toast("Tap the map along the trail, in order") }
+function onTdClick(e){ tdPts.push([r6(e.latlng.lat),r6(e.latlng.lng)]); renderTd() }
+function renderTd(){ if(!tdPts) return; tdLine.setLatLngs(tdPts); $$("tdTxt").textContent=tdPts.length<2?"Deer trail":`Deer trail · ${yd(lineLen(tdPts))} yd`; $$("tdSub").textContent=tdPts.length<2?"Tap the map along the trail, in order":`${tdPts.length} points. Tap Done when finished.` }
+function endTrailDraw(){ if(!tdPts) return; tdPts=null; map.off("click",onTdClick); tdLine.remove(); $$("trailBar").hidden=true }
+$$("btnTrailDraw").onclick=startTrailDraw;
+$$("tdUndo").onclick=()=>{ if(tdPts){tdPts.pop();renderTd()} };
+$$("tdCancel").onclick=()=>endTrailDraw();
+$$("tdDone").onclick=()=>{ if(!tdPts||tdPts.length<2){toast("Tap at least 2 points along the trail");return} $$("trailBar").hidden=true; map.off("click",onTdClick); openTrail(tdPts.slice(),"drawn on the map") };
 
 /* ----- walk-in routes (admin): a saved track becomes the route to a stand, shared with the club ----- */
 let routeTrack=null;
@@ -1699,7 +1791,7 @@ $$("btnMeasure").onclick=startMeasure;
 /* ---------- floating bars stack under the top chips ---------- */
 function placeBars(){
   let y=document.querySelector(".top").getBoundingClientRect().bottom+8;
-  ["recBar","navBar","bloodBar","measureBar","editBar","pickBar","pinPickBar"].forEach(id=>{const el=$$(id); if(!el.hidden){el.style.top=y+"px"; y+=el.offsetHeight+8}});
+  ["recBar","trailBar","navBar","bloodBar","measureBar","editBar","pickBar","pinPickBar"].forEach(id=>{const el=$$(id); if(!el.hidden){el.style.top=y+"px"; y+=el.offsetHeight+8}});
 }
 new MutationObserver(placeBars).observe(document.body,{subtree:true,attributes:true,attributeFilter:["hidden"]});
 addEventListener("resize",placeBars);
