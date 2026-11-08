@@ -137,6 +137,11 @@ label.f{display:grid;gap:4px;font:500 12px var(--mono);color:var(--muted);text-t
 @keyframes recblink{50%{opacity:.25}}
 #trackList .trk{display:grid;gap:4px}
 #trackList .trk .m{color:var(--muted);font-size:12.5px}
+#standList .st{display:grid;grid-template-columns:1fr auto;gap:6px;align-items:center}
+#standList .st label{margin:0}
+#standList .st .m{color:var(--muted);font-size:12.5px}
+#standList .st .btn{padding:6px 10px;font-size:12.5px;margin:0}
+#standList .sub{font:600 12px var(--body);color:var(--muted);text-transform:uppercase;letter-spacing:.06em;margin-top:4px}
 .tr-ar{width:18px;height:18px;pointer-events:none}.tr-ar svg{display:block}
 .camgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(96px,1fr));gap:6px;margin:10px 0}
 .camgrid button{position:relative;padding:0;border:0;border-radius:8px;overflow:hidden;background:#000;aspect-ratio:4/3;cursor:pointer}
@@ -299,6 +304,8 @@ input[type=range]{padding:0;accent-color:var(--accent)}
     <section class="pane" id="p-layers">
       <div class="sec">Base map</div>
       <div class="layers" id="baseLayers"></div>
+      <div class="sec">Stands</div>
+      <div class="layers" id="standList"></div>
       <div class="sec">Overlays</div>
       <div class="layers" id="overLayers"></div>
       <div class="sec">Tools</div>
@@ -683,6 +690,8 @@ function fitLease(){if(!LEASE)return;const h=document.body.classList.contains("m
 function props(){if(!LEASE)return[];return (LEASE.properties&&LEASE.properties.length)?LEASE.properties:[{id:"P1",name:"Hog Creek",color:"#ffd600",boundary:LEASE.boundary}]}
 function leaseBounds(){const b=L.latLngBounds([]);props().forEach(p=>p.boundary.forEach(q=>b.extend(q)));return b}
 const standMarkers={}, propPolys={};
+const HID=new Set(S.get("hiddenStands",[]));
+const standShown=k=>!HID.has(k);
 function buildLease(fit){
   ["Boundary","Scrape line","Roads","Camp","Neighbor lines","Public land (WMA)","Walk-in routes"].forEach(k=>ov[k].clearLayers());
   standLayer.clearLayers(); oldLayer.clearLayers();
@@ -699,7 +708,7 @@ function buildLease(fit){
   if(LEASE.mainRoad){L.polyline(LEASE.mainRoad,{color:"#000",weight:8,opacity:.45}).addTo(ov["Roads"]);L.polyline(LEASE.mainRoad,{color:"#fff",weight:4}).bindPopup("<h4>Main road</h4>Existing, good shape.").addTo(ov["Roads"])}
   if(LEASE.newRoad){L.polyline(LEASE.newRoad,{color:"#000",weight:8,opacity:.45}).addTo(ov["Roads"]);L.polyline(LEASE.newRoad,{color:"#ffd34d",weight:4,dashArray:"10 7"}).bindPopup("<h4>SE line road</h4>Proposed reopen. Needs Weyerhaeuser forester approval first; no cutting commercial trees.").addTo(ov["Roads"])}
   if(LEASE.camp) L.marker(LEASE.camp,{icon:L.divIcon({className:"lbl",html:'<div class="camp-ic">C</div>',iconSize:[30,30],iconAnchor:[15,15]})}).bindPopup("<h4>Camp</h4>In the pines, about 130 m off the road.").addTo(ov["Camp"]);
-  (LEASE.stands||[]).forEach(s=>{
+  (LEASE.stands||[]).filter(s=>standShown(s.id)).forEach(s=>{
     const m=L.marker(s.ll,{icon:L.divIcon({className:"lbl",html:`<div class="stand-ic">${esc(s.id)}</div>`,iconSize:[34,34],iconAnchor:[17,17]}),zIndexOffset:500});
     m.bindPopup(()=>standPopup(s)); m.addTo(standLayer); standMarkers[s.id]=m;
     if(Array.isArray(s.route)&&s.route.length>1){L.polyline(s.route,{color:"#000",weight:6,opacity:.35,interactive:false}).addTo(routeLayer);
@@ -928,11 +937,11 @@ function drawCones(){
   const dir=WX.hourly.wind_direction_10m[i]; const to=(dir+180)%360;
   const cone=(ll,col)=>{const pts=[ll]; for(let a=-22;a<=22;a+=4) pts.push(dest(ll,to+a,180));
     L.polygon(pts,{color:col,weight:1,fillColor:col,fillOpacity:.18,interactive:false}).addTo(coneLayer)};
-  if(LEASE&&map.hasLayer(standLayer)) LEASE.stands.forEach(s=>{
+  if(LEASE&&map.hasLayer(standLayer)) LEASE.stands.filter(s=>standShown(s.id)).forEach(s=>{
     const fit=windFit(s,dir).f; cone(s.ll,fit>=1?"#5fd38a":fit>=.5?"#e9c84a":"#ef6a5a");
   });
   // pins have no "good winds" saved, so their cones are white
-  if(map.hasLayer(pinLayer)&&pinFilter.has("stand")) PINS.filter(p=>!p.deleted&&p.type==="stand").forEach(p=>cone([+p.lat,+p.lon],"#ffffff"));
+  if(map.hasLayer(pinLayer)&&pinFilter.has("stand")) PINS.filter(p=>!p.deleted&&p.type==="stand"&&standShown("pin:"+p.id)).forEach(p=>cone([+p.lat,+p.lon],"#ffffff"));
 }
 function standPopup(s){
   let html=`<h4>${esc(s.id)} · ${esc(s.name)}</h4><div>${esc(s.type)}${s.kids?" · kid friendly":""}${s.facing!=null&&isFinite(s.facing)?` · faces ${card(+s.facing)}`:""}</div><div style="margin-top:4px">${esc(s.why)}</div><div class="pop-m" style="margin-top:4px">Walk in: ${esc(s.walk)}</div>${Array.isArray(s.route)&&s.route.length>1?`<div class="pop-m" style="color:#7df9ff">Walk-in route: ${yd(lineLen(s.route))} yd. Guide me follows it.</div>`:""}`;
@@ -1033,9 +1042,9 @@ const pinFilter=new Set(S.get("pinFilter",PIN_TYPES.map(t=>t.k)));
  PIN_TYPES.forEach(t=>{if(!known.includes(t.k))pinFilter.add(t.k)}); S.set("pinKnown",PIN_TYPES.map(t=>t.k)); S.set("pinFilter",[...pinFilter])}
 function pinIcon(t){return L.divIcon({className:"lbl",html:`<div class="picon" style="background:${t.c}">${t.g}</div>`,iconSize:[26,26],iconAnchor:[13,13]})}
 function renderPins(){
-  pinLayer.clearLayers(); if(typeof drawCones==="function") drawCones();
+  pinLayer.clearLayers(); if(typeof drawCones==="function") drawCones(); renderStandList();
   const live=PINS.filter(p=>!p.deleted);
-  live.filter(p=>pinFilter.has(p.type)).forEach(p=>{
+  live.filter(p=>pinFilter.has(p.type)&&!(p.type==="stand"&&!standShown("pin:"+p.id))).forEach(p=>{
     const t=TYPE[p.type]||TYPE.note;
     L.marker([+p.lat,+p.lon],{icon:pinIcon(t)}).bindPopup(()=>{
       const d=document.createElement("div");
@@ -1271,6 +1280,28 @@ document.getElementById("grip").onclick=()=>collapse(!document.body.classList.co
 selectTab(S.get("tab","today"));
 
 /* ---------- layers pane ---------- */
+// Map tab > Stands: one switch for all club stands, then each stand (and each dropped Deer stand pin)
+function renderStandList(){
+  const box=$$("standList"); if(!box) return; box.innerHTML="";
+  const sw=(on,fn)=>{const i=document.createElement("input");i.type="checkbox";i.className="sw";i.setAttribute("role","switch");i.checked=on;i.onchange=()=>fn(i.checked);return i};
+  const all=document.createElement("label"); all.innerHTML="<span><b>All club stands</b></span>";
+  all.appendChild(sw(map.hasLayer(standLayer),on=>{on?standLayer.addTo(map):map.removeLayer(standLayer);S.set("ov",Object.keys(ov).filter(k=>map.hasLayer(ov[k])));renderStandList()})); box.appendChild(all);
+  const setShown=(k,on)=>{on?HID.delete(k):HID.add(k);S.set("hiddenStands",[...HID]);buildLease(false);renderPins();drawCones();renderStandList()};
+  const row=(key,title,sub,canDel,onDel)=>{
+    const w=document.createElement("div"); w.className="st";
+    const l=document.createElement("label"); l.innerHTML=`<span>${title}<br><span class="m">${sub}</span></span>`; l.appendChild(sw(standShown(key),on=>setShown(key,on))); w.appendChild(l);
+    if(canDel){const b=document.createElement("button");b.type="button";b.className="btn danger";b.textContent="Delete";
+      b.onclick=()=>{if(!b.dataset.sure){b.dataset.sure=1;b.textContent="Sure?";return} onDel()};w.appendChild(b)} else w.appendChild(document.createElement("span"));
+    box.appendChild(w);
+  };
+  (LEASE?.stands||[]).forEach(s=>row(s.id,`${esc(s.id)} · ${esc(s.name)}`,`${esc(s.type||"Stand")}${s.facing!=null&&isFinite(s.facing)?` · faces ${card(+s.facing)}`:""}`,!!ME?.admin,()=>{
+    LEASE.stands=LEASE.stands.filter(x=>x.id!==s.id); delete standMarkers[s.id]; HID.delete(s.id); S.set("hiddenStands",[...HID]);
+    saveLease(); enqueue({action:"deleteStand",id:s.id}); toast(`Deleted ${s.id}`)}));
+  const pins=PINS.filter(p=>!p.deleted&&p.type==="stand");
+  if(pins.length){const h=document.createElement("div");h.className="sub";h.textContent="Dropped Deer stand pins";box.appendChild(h)}
+  pins.forEach(p=>row("pin:"+p.id,esc((p.note||"Deer stand").slice(0,40)),`Pin by ${esc(p.by||"someone")}`,canEdit(p),()=>{HID.delete("pin:"+p.id);S.set("hiddenStands",[...HID]);deletePin(p.id)}));
+  if(!(LEASE?.stands||[]).length&&!pins.length) box.insertAdjacentHTML("beforeend",'<div class="note">No stands yet.</div>');
+}
 function renderLayers(){
   const bl=document.getElementById("baseLayers"); bl.innerHTML="";
   Object.keys(bases).forEach(n=>{const l=document.createElement("label");l.innerHTML=`<span>${n}</span><input type="checkbox" class="sw" role="switch" ${n===baseName?"checked":""}>`;l.querySelector("input").onchange=e=>{
@@ -1278,7 +1309,8 @@ function renderLayers(){
       if(n==="Aerial"){e.target.checked=true;toast("Switch on Topo or LiDAR terrain to change the base map");return} }
     const next=e.target.checked?n:"Aerial"; map.removeLayer(bases[baseName]); baseName=next; bases[next].addTo(map); bases[next].bringToBack(); S.set("base",next); renderLayers()};bl.appendChild(l)});
   const ol=document.getElementById("overLayers"); ol.innerHTML="";
-  Object.keys(ov).forEach(n=>{const l=document.createElement("label");l.innerHTML=`<span>${n}</span><input type="checkbox" class="sw" role="switch" ${map.hasLayer(ov[n])?"checked":""}>`;l.querySelector("input").onchange=e=>{e.target.checked?ov[n].addTo(map):map.removeLayer(ov[n]);S.set("ov",Object.keys(ov).filter(k=>map.hasLayer(ov[k])))};ol.appendChild(l)});
+  renderStandList();
+  Object.keys(ov).filter(n=>n!=="Stands").forEach(n=>{const l=document.createElement("label");l.innerHTML=`<span>${n}</span><input type="checkbox" class="sw" role="switch" ${map.hasLayer(ov[n])?"checked":""}>`;l.querySelector("input").onchange=e=>{e.target.checked?ov[n].addTo(map):map.removeLayer(ov[n]);S.set("ov",Object.keys(ov).filter(k=>map.hasLayer(ov[k])))};ol.appendChild(l)});
 }
 document.getElementById("btnFit").onclick=()=>{collapse(true);setTimeout(fitLease,260)};
 
