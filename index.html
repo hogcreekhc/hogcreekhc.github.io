@@ -311,8 +311,8 @@ input[type=range]{padding:0;accent-color:var(--accent)}
       <div class="sec">Tools</div>
       <div class="row"><button class="btn" id="btnMeasure">Measure distance / area</button><button class="btn" id="btnBlood">Start a blood trail</button></div>
       <div class="row"><button class="btn" id="btnFit">Zoom to property</button><button class="btn" id="btnTrack">Start a track</button></div>
-      <div class="row"><button class="btn" id="btnTrailDraw">Draw a deer trail</button></div>
-      <p class="note">To map a deer trail by walking it, use Start a track, then choose "Save as deer trail" when you stop.</p>
+      <div class="row"><button class="btn" id="btnTrailDraw">Draw a deer trail</button><button class="btn" id="btnRoadDraw">Draw a road</button></div>
+      <p class="note">To map a deer trail or a road by walking or driving it, use Start a track, then choose "Save as deer trail" or "Save as road" when you stop.</p>
       <div class="sec">Saved tracks <span style="text-transform:none;letter-spacing:0">(on this phone)</span></div>
       <div class="layers" id="trackList"></div>
       <div class="row"><button class="btn danger" id="btnClearTracks" hidden>Clear all tracks</button></div>
@@ -526,7 +526,21 @@ input[type=range]{padding:0;accent-color:var(--accent)}
     <label class="f">Name<input id="trkName" maxlength="60" required></label>
     <div class="status" id="trkInfo"></div>
     <div class="row"><button class="btn primary" type="submit">Save track</button><button class="btn" type="button" id="trkAsTrail">Save as deer trail</button></div>
+    <div class="row"><button class="btn" type="button" id="trkAsRoad">Save as road</button></div>
     <div class="row"><button class="btn danger" type="button" id="trkDiscard">Discard</button></div>
+  </form>
+</div>
+
+<div class="modal" id="roadModal" hidden>
+  <form class="card" id="roadForm">
+    <h2>Road</h2>
+    <div class="status" id="rdInfo"></div>
+    <label class="f">Name<input id="rdName" maxlength="60" placeholder="Main road"></label>
+    <div class="sec">Kind</div>
+    <div class="row" id="rdKind"></div>
+    <label class="f">Note<textarea id="rdNote" rows="2" maxlength="300" placeholder="Washes out after rain; gate at the south end"></textarea></label>
+    <p class="note">The whole club sees roads.</p>
+    <div class="row"><button class="btn primary" type="submit">Save road</button><button class="btn" type="button" id="rdBack">Back</button></div>
   </form>
 </div>
 
@@ -661,8 +675,8 @@ ov["Elevation (high / low)"]=new ExportTiles(IMG+encodeURIComponent(RR_ELEV),{op
 ov[SLOPE]=new ExportTiles(IMG+encodeURIComponent(RR_SLOPE),{opacity:.5,maxZoom:20,maxNativeZoom:17,zIndex:3,attribution:"USGS 3DEP"});
 ov["10 ft contours"]=new WMSTiles(WMS("3DEPElevation:Preset 10ft Contour Interval"),{maxZoom:20,maxNativeZoom:17,opacity:.85,zIndex:4,attribution:"USGS 3DEP"});
 ov["Boundary"]=L.layerGroup();
-ov["Scrape line"]=L.layerGroup();
 ov["Roads"]=L.layerGroup();
+let ROADS=S.get("roads",[]);   // roads the club traces (the old hard-coded roads and scrape line are no longer drawn)
 ov["Camp"]=L.layerGroup();
 ov["Neighbor lines"]=L.layerGroup();
 ov["Public land (WMA)"]=L.layerGroup();
@@ -678,7 +692,7 @@ const mateLayer=L.layerGroup(); ov["Members sharing location"]=mateLayer;
 const taskLayer=L.layerGroup(); ov["Work list"]=taskLayer;
 const harvLayer=L.layerGroup(); ov["Harvests"]=harvLayer;
 const navLayer=L.layerGroup().addTo(map), measLayer=L.layerGroup().addTo(map), bloodLayer=L.layerGroup().addTo(map);
-const defaultsOn=["Public land (WMA)","Neighbor lines","Members sharing location","Work list","Harvests","Hunters","Boundary","Scrape line","Roads","Camp","Stands","Club pins","Scent cones","Tracks","Walk-in routes","Deer trails"];
+const defaultsOn=["Public land (WMA)","Neighbor lines","Members sharing location","Work list","Harvests","Hunters","Boundary","Roads","Camp","Stands","Club pins","Scent cones","Tracks","Walk-in routes","Deer trails"];
 let ovOn=S.get("ov",defaultsOn).map(n=>({"Blowdown & scrape line":"Scrape line","Slope (flat / steep)":SLOPE,"My track":"Tracks"})[n]||n);
 // one time: contours used to start on over the aerial; turn them off once (members can switch them back on)
 if(S.get("ovV",0)<1){ ovOn=ovOn.filter(n=>n!=="10 ft contours"); S.set("ov",ovOn); S.set("ovV",1); }
@@ -693,7 +707,7 @@ const standMarkers={}, propPolys={};
 const HID=new Set(S.get("hiddenStands",[]));
 const standShown=k=>!HID.has(k);
 function buildLease(fit){
-  ["Boundary","Scrape line","Roads","Camp","Neighbor lines","Public land (WMA)","Walk-in routes"].forEach(k=>ov[k].clearLayers());
+  ["Boundary","Camp","Neighbor lines","Public land (WMA)","Walk-in routes"].forEach(k=>ov[k].clearLayers());
   standLayer.clearLayers(); oldLayer.clearLayers();
   if(!LEASE) return;
   props().forEach(p=>{
@@ -704,9 +718,6 @@ function buildLease(fit){
     (LEASE.neighbors.public||[]).forEach(p=>L.polygon(p.poly,{color:"#3fbf5f",weight:2,dashArray:"4 4",fillColor:"#3fbf5f",fillOpacity:.18}).bindPopup(`<h4>${esc(p.name)}</h4>Public hunting land (USFS). On WMA hunt days, pressure here can push deer onto the lease.`).addTo(ov["Public land (WMA)"]));
     LEASE.neighbors.labels.forEach(n=>L.marker(n.ll,{icon:L.divIcon({className:"lbl",html:`<div class="nb-lbl" style="transform:translate(${n.align==="end"?"-100%":n.align==="start"?"0":"-50%"},-50%)">${esc(n.name)}</div>`,iconSize:[0,0]}),interactive:false}).addTo(ov["Neighbor lines"]));
   }
-  if(LEASE.scrape) L.polyline(LEASE.scrape,{color:"#ff3b8b",weight:5,dashArray:"2 9",lineCap:"round"}).bindPopup("<h4>Scrape & rub line</h4>On the rise between the pines and hardwoods.").addTo(ov["Scrape line"]);
-  if(LEASE.mainRoad){L.polyline(LEASE.mainRoad,{color:"#000",weight:8,opacity:.45}).addTo(ov["Roads"]);L.polyline(LEASE.mainRoad,{color:"#fff",weight:4}).bindPopup("<h4>Main road</h4>Existing, good shape.").addTo(ov["Roads"])}
-  if(LEASE.newRoad){L.polyline(LEASE.newRoad,{color:"#000",weight:8,opacity:.45}).addTo(ov["Roads"]);L.polyline(LEASE.newRoad,{color:"#ffd34d",weight:4,dashArray:"10 7"}).bindPopup("<h4>SE line road</h4>Proposed reopen. Needs Weyerhaeuser forester approval first; no cutting commercial trees.").addTo(ov["Roads"])}
   if(LEASE.camp) L.marker(LEASE.camp,{icon:L.divIcon({className:"lbl",html:'<div class="camp-ic">C</div>',iconSize:[30,30],iconAnchor:[15,15]})}).bindPopup("<h4>Camp</h4>In the pines, about 130 m off the road.").addTo(ov["Camp"]);
   (LEASE.stands||[]).filter(s=>standShown(s.id)).forEach(s=>{
     const m=L.marker(s.ll,{icon:L.divIcon({className:"lbl",html:`<div class="stand-ic">${esc(s.id)}</div>`,iconSize:[34,34],iconAnchor:[17,17]}),zIndexOffset:500});
@@ -1107,7 +1118,7 @@ function applyServer(j){
   if(!QUEUE.length){
     const keepPhotos=Object.fromEntries(HARV.filter(h=>h._photo).map(h=>[h.id,h._photo]));
     if(j.settings){CSET=j.settings;S.set("cset",CSET)}
-    RES=j.reservations||[]; SITS=j.sits||[]; TASKS=j.tasks||[]; MEMBERS=j.members||[]; if(j.trails) TRAILS=j.trails; if(j.camPhotos) CAMS=j.camPhotos;
+    RES=j.reservations||[]; SITS=j.sits||[]; TASKS=j.tasks||[]; MEMBERS=j.members||[]; if(j.trails) TRAILS=j.trails; if(j.roads) ROADS=j.roads; if(j.camPhotos) CAMS=j.camPhotos;
     HARV=(j.harvests||[]).map(h=>(!h.photoId&&keepPhotos[h.id])?Object.assign(h,{_photo:keepPhotos[h.id]}):h);
     saveData();
   }
@@ -1119,7 +1130,7 @@ function applyServer(j){
   if(fresh) renderAll(); else renderAdmin();
 }
 function signOut(silent){
-  cfg.code=""; S.set("cfg",cfg); ME=null; LEASE=null; PINS=[]; QUEUE=[]; CHECKINS=[]; RES=[]; SITS=[]; TASKS=[]; HARV=[]; MEMBERS=[]; TRAILS=[]; CAMS=[];
+  cfg.code=""; S.set("cfg",cfg); ME=null; LEASE=null; PINS=[]; QUEUE=[]; CHECKINS=[]; RES=[]; SITS=[]; TASKS=[]; HARV=[]; MEMBERS=[]; TRAILS=[]; CAMS=[]; ROADS=[];
   ["me","lease","pins","queue","track","checkins","res","sits","tasks","harv","members"].forEach(k=>S.set(k,null)); hunterLayer.clearLayers();
   stopNav(); taskLayer.clearLayers(); harvLayer.clearLayers(); LOCS=[]; S.set("locs",null); mateLayer.clearLayers(); shareOn=false; S.set("share",false);
   buildLease(false); pinLayer.clearLayers(); coneLayer.clearLayers();
@@ -1371,7 +1382,7 @@ if(S.get("offlineAt",0)){document.getElementById("offlineStatus").textContent="L
 let LOCS=S.get("locs",[]);
 let CSET=Object.assign({reservations:"on",on_property_only:"yes",days_ahead:1,morning_opens_minutes_before:null,morning_no_show_minutes:30,evening_no_show_minutes:30},S.get("cset",{}));
 let RES=S.get("res",[]), SITS=S.get("sits",[]), TASKS=S.get("tasks",[]), HARV=S.get("harv",[]), MEMBERS=S.get("members",[]), TRAILS=S.get("trails",[]), CAMS=S.get("cams",[]);
-function saveData(){S.set("res",RES);S.set("sits",SITS);S.set("tasks",TASKS);S.set("harv",HARV);S.set("members",MEMBERS);S.set("trails",TRAILS);S.set("cams",CAMS)}
+function saveData(){S.set("res",RES);S.set("sits",SITS);S.set("tasks",TASKS);S.set("harv",HARV);S.set("members",MEMBERS);S.set("trails",TRAILS);S.set("cams",CAMS);S.set("roads",ROADS)}
 const uid=()=>Date.now().toString(36)+Math.random().toString(36).slice(2,7);
 const $$=id=>document.getElementById(id);
 function showModal(id){$$(id).hidden=false}
@@ -1396,7 +1407,7 @@ function chips(el,items,cur,onPick){
 const localISO=(date,hm)=>new Date(`${date}T${hm||"00:00"}`).toISOString();
 const hm=d=>{const x=new Date(d);return String(x.getHours()).padStart(2,"0")+":"+String(x.getMinutes()).padStart(2,"0")};
 const ymd=d=>dayKey(new Date(d));
-function renderClubData(){renderRes();renderLog();renderTasks();renderTaskLayer();renderHarvLayer();renderTrails()}
+function renderClubData(){renderRes();renderLog();renderTasks();renderTaskLayer();renderHarvLayer();renderTrails();renderRoads()}
 
 /* ---------- legal light ---------- */
 function renderLight(){
@@ -1474,6 +1485,7 @@ $$("trackForm").onsubmit=e=>{
   const t={id:Date.now().toString(36),name:$$("trkName").value.trim().slice(0,60)||"Track",date:new Date(REC.start).toISOString(),pts:REC.pts.map(q=>[r6(q[0]),r6(q[1])]),shown:false};
   TRACKS.unshift(t); S.set("tracks",TRACKS); endRec(); renderTracks(); toast(`Saved "${t.name}". It's under Map > Saved tracks.`);
 };
+$$("trkAsRoad").onclick=()=>{ if(!REC) return; const pts=REC.pts.map(q=>[r6(q[0]),r6(q[1])]); openRoad(pts,"traced",()=>endRec()); };
 $$("trkAsTrail").onclick=()=>{ if(!REC) return; const pts=REC.pts.map(q=>[r6(q[0]),r6(q[1])]); openTrail(pts,"walked",()=>endRec()); };
 $$("trkDiscard").onclick=()=>{const b=$$("trkDiscard"); if(!b.dataset.sure){b.dataset.sure=1;b.textContent="Tap again to discard";return} endRec(); toast("Track discarded")};
 function saveTracks(){S.set("tracks",TRACKS);renderTracks()}
@@ -1490,6 +1502,7 @@ function renderTracks(){
     const row=w.querySelector(".mini"), btn=(txt,fn,cls)=>{const b=document.createElement("button");b.type="button";b.className="btn"+(cls?" "+cls:"");b.textContent=txt;b.onclick=()=>fn(b);row.appendChild(b)};
     btn("Show on map",()=>{t.shown=true;if(!map.hasLayer(trackLayer))trackLayer.addTo(map);saveTracks();collapse(true);setTimeout(()=>map.fitBounds(L.latLngBounds(t.pts).pad(.25)),260)});
     if(ME) btn("Make deer trail…",()=>openTrail(t.pts.slice(),"walked"));
+    if(ME) btn("Make road…",()=>openRoad(t.pts.slice(),"traced"));
     if(ME?.admin&&LEASE?.stands?.length) btn("Walk-in route…",()=>openRoute(t));
     btn("Delete",b=>{if(!b.dataset.sure){b.dataset.sure=1;b.textContent="Tap again to delete";return} TRACKS=TRACKS.filter(x=>x.id!==t.id);saveTracks();toast("Track deleted")},"danger");
     box.appendChild(w);
@@ -1709,15 +1722,48 @@ function renderTrails(){
   });
 }
 // draw a trail by tapping points
-let tdPts=null; const tdLine=L.polyline([],{color:"#ffa726",weight:4,dashArray:"6 6",interactive:false});
-function startTrailDraw(){ if(!ME){openSignIn();return} tdPts=[]; tdLine.setLatLngs([]).addTo(map); $$("trailBar").hidden=false; map.on("click",onTdClick); collapse(true); renderTd(); toast("Tap the map along the trail, in order") }
+let tdPts=null, tdKind="trail"; const tdLine=L.polyline([],{color:"#ffa726",weight:4,dashArray:"6 6",interactive:false});
+function startTrailDraw(kind){ if(!ME){openSignIn();return} tdKind=kind==="road"?"road":"trail"; tdPts=[]; tdLine.setLatLngs([]).addTo(map); $$("trailBar").hidden=false; map.on("click",onTdClick); collapse(true); renderTd(); toast("Tap the map along the trail, in order") }
 function onTdClick(e){ tdPts.push([r6(e.latlng.lat),r6(e.latlng.lng)]); renderTd() }
-function renderTd(){ if(!tdPts) return; tdLine.setLatLngs(tdPts); $$("tdTxt").textContent=tdPts.length<2?"Deer trail":`Deer trail · ${yd(lineLen(tdPts))} yd`; $$("tdSub").textContent=tdPts.length<2?"Tap the map along the trail, in order":`${tdPts.length} points. Tap Done when finished.` }
+function renderTd(){ if(!tdPts) return; tdLine.setLatLngs(tdPts); const nm=tdKind==="road"?"Road":"Deer trail"; $$("tdTxt").textContent=tdPts.length<2?nm:`${nm} · ${yd(lineLen(tdPts))} yd`; $$("tdSub").textContent=tdPts.length<2?`Tap the map along the ${tdKind}, in order`:`${tdPts.length} points. Tap Done when finished.` }
 function endTrailDraw(){ if(!tdPts) return; tdPts=null; map.off("click",onTdClick); tdLine.remove(); $$("trailBar").hidden=true }
-$$("btnTrailDraw").onclick=startTrailDraw;
+$$("btnTrailDraw").onclick=()=>startTrailDraw("trail"); $$("btnRoadDraw").onclick=()=>startTrailDraw("road");
 $$("tdUndo").onclick=()=>{ if(tdPts){tdPts.pop();renderTd()} };
 $$("tdCancel").onclick=()=>endTrailDraw();
-$$("tdDone").onclick=()=>{ if(!tdPts||tdPts.length<2){toast("Tap at least 2 points along the trail");return} $$("trailBar").hidden=true; map.off("click",onTdClick); openTrail(tdPts.slice(),"drawn on the map") };
+$$("tdDone").onclick=()=>{ if(!tdPts||tdPts.length<2){toast("Tap at least 2 points along the trail");return} $$("trailBar").hidden=true; map.off("click",onTdClick); tdKind==="road"?openRoad(tdPts.slice(),"drawn on the map"):openTrail(tdPts.slice(),"drawn on the map") };
+
+/* ---------- roads: traced or drawn by members, shared with the club ---------- */
+const ROAD_KIND={"Road":{c:"#ffffff",w:4,dash:null},"ATV trail":{c:"#ffd34d",w:3.5,dash:"10 7"},"Foot path":{c:"#ffffff",w:2.5,dash:"2 6"}};
+let roadDraft=null, roadKind="Road", roadAfter=null;
+function openRoad(pts,how,after){
+  if(!ME){openSignIn();return}
+  roadDraft=pts; roadAfter=after||null; roadKind="Road";
+  $$("rdInfo").textContent=`${yd(lineLen(pts))} yd, ${how}`; $$("rdName").value=""; $$("rdNote").value="";
+  renderRoadKind(); $$("trackModal").hidden=true; $$("roadModal").hidden=false;
+}
+function renderRoadKind(){const box=$$("rdKind");box.innerHTML="";Object.keys(ROAD_KIND).forEach(k=>{const b=document.createElement("button");b.type="button";b.className="btn"+(k===roadKind?" primary":"");b.textContent=k;b.onclick=()=>{roadKind=k;renderRoadKind()};box.appendChild(b)})}
+$$("rdBack").onclick=()=>{$$("roadModal").hidden=true; if(REC&&roadAfter) $$("trackModal").hidden=false; else if(tdPts){$$("trailBar").hidden=false;map.on("click",onTdClick)}};
+$$("roadForm").onsubmit=e=>{
+  e.preventDefault(); if(!roadDraft) return;
+  const r={id:"rd"+Date.now().toString(36)+Math.random().toString(36).slice(2,5),name:$$("rdName").value.trim().slice(0,60)||roadKind,kind:roadKind,date:dayKey(new Date()),by:ME.name,note:$$("rdNote").value.trim().slice(0,300),pts:roadDraft,_pending:true};
+  ROADS.push(r); $$("roadModal").hidden=true; roadDraft=null; endTrailDraw();
+  if(roadAfter){roadAfter();roadAfter=null}
+  if(!map.hasLayer(ov["Roads"])) ov["Roads"].addTo(map);
+  const {_pending,...send}=r; enqueue(Object.assign({action:"addRoad"},send)); toast(`Saved "${r.name}"`);
+};
+function renderRoads(){
+  const lay=ov["Roads"]; lay.clearLayers();
+  ROADS.forEach(r=>{
+    if(!Array.isArray(r.pts)||r.pts.length<2) return; const k=ROAD_KIND[r.kind]||ROAD_KIND.Road;
+    L.polyline(r.pts,{color:"#000",weight:k.w+4,opacity:.45,interactive:false}).addTo(lay);
+    L.polyline(r.pts,{color:k.c,weight:k.w,dashArray:k.dash}).bindPopup(()=>{
+      const d=document.createElement("div");
+      d.innerHTML=`<h4>${esc(r.name)}</h4><div>${esc(r.kind)} · ${yd(lineLen(r.pts))} yd</div>${r.note?`<div style="margin-top:4px">${esc(r.note)}</div>`:""}<div class="pop-m">${esc(r.by||"Someone")} · ${esc(r.date)}${r._pending?" · waiting to upload":""}</div>`;
+      if(canEdit(r)){const b=document.createElement("button");b.className="btn danger";b.style.marginTop="8px";b.textContent="Delete road";
+        b.onclick=()=>{if(!b.dataset.sure){b.dataset.sure=1;b.textContent="Tap again to delete";return} ROADS=ROADS.filter(x=>x.id!==r.id); enqueue({action:"deleteRoad",id:r.id}); map.closePopup(); toast("Road deleted")};d.appendChild(b)}
+      return d}).addTo(lay);
+  });
+}
 
 /* ----- walk-in routes (admin): a saved track becomes the route to a stand, shared with the club ----- */
 let routeTrack=null;
@@ -2169,7 +2215,7 @@ function startEdit(p){
   $$("edSpacing").value=ED.spacing; $$("edAcc").value=ED.maxAcc;
   if(p&&propPolys[p.id]) propPolys[p.id].setStyle({opacity:.25,fillOpacity:0});
   // taps on lines and areas add points instead of opening popups (stopEdit rebuilds them)
-  ["Boundary","Scrape line","Roads","Neighbor lines","Public land (WMA)"].forEach(k=>ov[k].eachLayer(l=>l.unbindPopup&&l.unbindPopup()));
+  ["Boundary","Roads","Neighbor lines","Public land (WMA)","Deer trails"].forEach(k=>ov[k].eachLayer(l=>l.unbindPopup&&l.unbindPopup()));
   map.closePopup(); map.on("click",edClick); $$("editBar").hidden=false; collapse(true);
   setTimeout(()=>{ if(p) map.fitBounds(L.polygon(p.boundary).getBounds(),{padding:[30,30]}); },260);
   renderEd();
@@ -2236,7 +2282,7 @@ $$("edCancel").onclick=()=>{
   if(changed&&!b.dataset.sure){b.dataset.sure=1;toast("Tap Cancel again to throw away your changes");setTimeout(()=>b.dataset.sure="",3000);return}
   b.dataset.sure=""; stopEdit();
 };
-function stopEdit(){ ED=null; keepAwake(false); edLayer.clearLayers(); map.off("click",edClick); $$("editBar").hidden=true; buildLease(false); renderHunters() }
+function stopEdit(){ ED=null; keepAwake(false); edLayer.clearLayers(); map.off("click",edClick); $$("editBar").hidden=true; buildLease(false); renderHunters(); renderRoads(); renderTrails() }
 
 /* ----- name / color, then save ----- */
 let PM=null;
