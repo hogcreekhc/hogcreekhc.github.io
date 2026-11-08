@@ -1,5 +1,5 @@
 // Hog Creek Lease offline helper: keeps the app and saved map tiles on the phone.
-const SHELL = 'hc-shell-v14', TILES = 'hc-tiles-v1';
+const SHELL = 'hc-shell-v15', TILES = 'hc-tiles-v1';
 const SHELL_FILES = ['./', './index.html',
   'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css',
   'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js',

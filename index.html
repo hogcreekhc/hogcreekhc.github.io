@@ -138,6 +138,15 @@ label.f{display:grid;gap:4px;font:500 12px var(--mono);color:var(--muted);text-t
 #trackList .trk{display:grid;gap:4px}
 #trackList .trk .m{color:var(--muted);font-size:12.5px}
 .tr-ar{width:18px;height:18px;pointer-events:none}.tr-ar svg{display:block}
+.camgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(96px,1fr));gap:6px;margin:10px 0}
+.camgrid button{position:relative;padding:0;border:0;border-radius:8px;overflow:hidden;background:#000;aspect-ratio:4/3;cursor:pointer}
+.camgrid img{width:100%;height:100%;object-fit:cover;display:block}
+.camgrid .cap{position:absolute;left:0;right:0;bottom:0;padding:2px 5px;font:600 10.5px var(--body);color:#fff;background:linear-gradient(transparent,rgba(0,0,0,.8));text-align:left}
+.camnew{display:grid;gap:10px;margin:8px 0}
+.camnew .it{display:grid;grid-template-columns:96px 1fr;gap:8px;align-items:start;border:1px solid var(--line);border-radius:10px;padding:6px}
+.camnew .it img{width:96px;height:72px;object-fit:cover;border-radius:6px}
+.camnew .it input{padding:5px 7px;font-size:13px}
+.cambig{width:100%;max-height:55vh;object-fit:contain;background:#000;border-radius:8px;display:block}
 .navarrow{width:44px;height:44px;border-radius:50%;background:#1d4f86;display:grid;place-items:center;flex:none;transition:transform .3s}
 .navt{font:700 19px var(--display);letter-spacing:.02em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .navs{font:12.5px var(--mono);color:var(--muted)}
@@ -391,6 +400,39 @@ input[type=range]{padding:0;accent-color:var(--accent)}
     <label class="f">Notes<textarea id="sitNotes" rows="2" placeholder="Came down the drainage at 7:40…"></textarea></label>
     <div class="status" id="sitWind"></div>
     <div class="row"><button class="btn primary" type="submit">Save sit</button><button class="btn" type="button" data-close>Skip</button></div>
+  </form>
+</div>
+
+<div class="modal" id="camAddModal" hidden>
+  <form class="card" id="camAddForm">
+    <h2>Add trail cam photos</h2>
+    <input type="file" id="camFiles" accept="image/*" multiple hidden>
+    <div class="row"><button type="button" class="btn" id="camPick">Choose photos</button></div>
+    <div class="status" id="camAddMsg"></div>
+    <div id="camAllRow" hidden><div class="sec">Tag all as</div><div class="filters" id="camAll"></div></div>
+    <div class="camnew" id="camNew"></div>
+    <div class="row"><button class="btn primary" type="submit" id="camSave" disabled>Save photos</button><button class="btn" type="button" data-close>Cancel</button></div>
+  </form>
+</div>
+
+<div class="modal" id="camGalModal" hidden>
+  <div class="card">
+    <h2 id="camGalTitle">Trail cam</h2>
+    <div class="filters" id="camFilt"></div>
+    <div class="camgrid" id="camGrid"></div>
+    <div class="row"><button class="btn primary" type="button" id="camGalAdd">Add photos</button><button class="btn" type="button" data-close>Close</button></div>
+  </div>
+</div>
+
+<div class="modal" id="camViewModal" hidden>
+  <form class="card" id="camViewForm">
+    <img id="camBig" class="cambig" alt="Trail cam photo">
+    <div class="status" id="camInfo"></div>
+    <label class="f">Date and time<input type="datetime-local" id="camTime"></label>
+    <div class="filters" id="camTags"></div>
+    <label class="f">Note<input id="camNote" maxlength="300"></label>
+    <div class="row"><button class="btn primary" type="submit" id="camUpd">Save changes</button><button class="btn" type="button" id="camBack">Back</button></div>
+    <div class="row"><button class="btn danger" type="button" id="camDel">Delete photo</button></div>
   </form>
 </div>
 
@@ -999,6 +1041,9 @@ function renderPins(){
       const d=document.createElement("div");
       d.innerHTML=`<h4>${esc(t.name)}</h4>${p.note?`<div>${esc(p.note)}</div>`:""}<div class="pop-m">${esc(p.by||"Someone")} · ${new Date(p.t).toLocaleString("en-US",{timeZone:CLUB.TZ,month:"short",day:"numeric",hour:"numeric",minute:"2-digit"})}${p._pending?" · waiting to upload":""}</div><div class="pop-m">${(+p.lat).toFixed(6)}, ${(+p.lon).toFixed(6)}</div>`;
       {const g=document.createElement("button");g.className="btn";g.style.marginTop="8px";g.style.marginRight="6px";g.textContent="Guide me";g.onclick=()=>{map.closePopup();guideTo((p.note||t.name).slice(0,40),[+p.lat,+p.lon])};d.appendChild(g)}
+      if(p.type==="cam"&&ME){const n=CAMS.filter(c=>c.pinId===p.id).length;
+        const a=document.createElement("button");a.className="btn primary";a.style.marginTop="8px";a.style.marginRight="6px";a.textContent=`Photos (${n})`;a.onclick=()=>{map.closePopup();openCamGallery(p)};d.appendChild(a);
+        const b=document.createElement("button");b.className="btn";b.style.marginTop="8px";b.style.marginRight="6px";b.textContent="Add photos";b.onclick=()=>{map.closePopup();openCamAdd(p)};d.appendChild(b)}
       if(ME&&["stand","dblind","duck","turkey"].includes(p.type)){const h=document.createElement("button");h.className="btn primary";h.style.marginTop="8px";h.style.marginRight="6px";h.textContent="I'm hunting here";h.onclick=()=>{checkIn({stand:"pin:"+p.id,label:(p.note||t.name).slice(0,40),ll:[+p.lat,+p.lon]});map.closePopup()};d.appendChild(h)}
       if(ME&&(ME.admin||p.by===ME.name)){
         const b=document.createElement("button"); b.className="btn danger"; b.style.marginTop="8px"; b.textContent="Delete pin";
@@ -1032,9 +1077,9 @@ async function sync(){
   syncing=true;
   try{
     while(QUEUE.length){
-      try{ const r=await api("POST",QUEUE[0]); onPosted(QUEUE[0],r); }
+      try{ const r=await api("POST",await prepItem(QUEUE[0])); onPosted(QUEUE[0],r); }
       catch(e){ if(!e.logical||String(e.message).includes("bad code")) throw e; toast(e.message); }
-      QUEUE.shift(); S.set("queue",QUEUE);
+      const sent=QUEUE.shift(); S.set("queue",QUEUE); if(sent&&sent._blob) IDB.del(sent._blob).catch(()=>{});
     }
     const j=await api("GET");
     applyServer(j);
@@ -1052,7 +1097,7 @@ function applyServer(j){
   if(!QUEUE.length){
     const keepPhotos=Object.fromEntries(HARV.filter(h=>h._photo).map(h=>[h.id,h._photo]));
     if(j.settings){CSET=j.settings;S.set("cset",CSET)}
-    RES=j.reservations||[]; SITS=j.sits||[]; TASKS=j.tasks||[]; MEMBERS=j.members||[]; if(j.trails) TRAILS=j.trails;
+    RES=j.reservations||[]; SITS=j.sits||[]; TASKS=j.tasks||[]; MEMBERS=j.members||[]; if(j.trails) TRAILS=j.trails; if(j.camPhotos) CAMS=j.camPhotos;
     HARV=(j.harvests||[]).map(h=>(!h.photoId&&keepPhotos[h.id])?Object.assign(h,{_photo:keepPhotos[h.id]}):h);
     saveData();
   }
@@ -1064,7 +1109,7 @@ function applyServer(j){
   if(fresh) renderAll(); else renderAdmin();
 }
 function signOut(silent){
-  cfg.code=""; S.set("cfg",cfg); ME=null; LEASE=null; PINS=[]; QUEUE=[]; CHECKINS=[]; RES=[]; SITS=[]; TASKS=[]; HARV=[]; MEMBERS=[]; TRAILS=[];
+  cfg.code=""; S.set("cfg",cfg); ME=null; LEASE=null; PINS=[]; QUEUE=[]; CHECKINS=[]; RES=[]; SITS=[]; TASKS=[]; HARV=[]; MEMBERS=[]; TRAILS=[]; CAMS=[];
   ["me","lease","pins","queue","track","checkins","res","sits","tasks","harv","members"].forEach(k=>S.set(k,null)); hunterLayer.clearLayers();
   stopNav(); taskLayer.clearLayers(); harvLayer.clearLayers(); LOCS=[]; S.set("locs",null); mateLayer.clearLayers(); shareOn=false; S.set("share",false);
   buildLease(false); pinLayer.clearLayers(); coneLayer.clearLayers();
@@ -1281,8 +1326,8 @@ if(S.get("offlineAt",0)){document.getElementById("offlineStatus").textContent="L
 /* ================= club data: reservations, sits, tasks, harvests ================= */
 let LOCS=S.get("locs",[]);
 let CSET=Object.assign({reservations:"on",on_property_only:"yes",days_ahead:1,morning_opens_minutes_before:null,morning_no_show_minutes:30,evening_no_show_minutes:30},S.get("cset",{}));
-let RES=S.get("res",[]), SITS=S.get("sits",[]), TASKS=S.get("tasks",[]), HARV=S.get("harv",[]), MEMBERS=S.get("members",[]), TRAILS=S.get("trails",[]);
-function saveData(){S.set("res",RES);S.set("sits",SITS);S.set("tasks",TASKS);S.set("harv",HARV);S.set("members",MEMBERS);S.set("trails",TRAILS)}
+let RES=S.get("res",[]), SITS=S.get("sits",[]), TASKS=S.get("tasks",[]), HARV=S.get("harv",[]), MEMBERS=S.get("members",[]), TRAILS=S.get("trails",[]), CAMS=S.get("cams",[]);
+function saveData(){S.set("res",RES);S.set("sits",SITS);S.set("tasks",TASKS);S.set("harv",HARV);S.set("members",MEMBERS);S.set("trails",TRAILS);S.set("cams",CAMS)}
 const uid=()=>Date.now().toString(36)+Math.random().toString(36).slice(2,7);
 const $$=id=>document.getElementById(id);
 function showModal(id){$$(id).hidden=false}
@@ -1290,6 +1335,7 @@ function hideModal(id){$$(id).hidden=true}
 document.querySelectorAll("[data-close]").forEach(b=>b.onclick=()=>b.closest(".modal").hidden=true);
 function enqueue(item){QUEUE.push(item);S.set("queue",QUEUE);saveData();renderClubData();sync()}
 function onPosted(item,r){
+  if(item.action==="addCamPhoto"&&r&&r.photoId){const c=CAMS.find(x=>x.id===item.id);if(c){c.photoId=r.photoId;delete c._blob;delete c._pending;saveData()}}
   if(item.action==="addHarvest"&&r&&r.photoId){const h=HARV.find(x=>x.id===item.id);if(h){h.photoId=r.photoId;delete h._photo;saveData()}}
 }
 const canEdit=row=>ME&&(ME.admin||row.name===ME.name||row.by===ME.name);
@@ -1407,6 +1453,165 @@ function renderTracks(){
   $$("btnClearTracks").hidden=!TRACKS.length; $$("btnClearTracks").dataset.sure=""; $$("btnClearTracks").textContent="Clear all tracks";
 }
 $$("btnClearTracks").onclick=()=>{const b=$$("btnClearTracks"); if(!b.dataset.sure){b.dataset.sure=1;b.textContent="Tap again to delete every saved track";return} TRACKS=[];saveTracks();toast("All tracks cleared")};
+
+/* ---------- trail cam photos ---------- */
+// photo bytes waiting to upload live in IndexedDB (localStorage is too small for a batch of photos)
+const IDB=(()=>{let dbp=null;
+  const open=()=>dbp||(dbp=new Promise((res,rej)=>{const r=indexedDB.open("hc",1);r.onupgradeneeded=()=>r.result.createObjectStore("blobs");r.onsuccess=()=>res(r.result);r.onerror=()=>rej(r.error)}));
+  const tx=(mode,fn)=>open().then(db=>new Promise((res,rej)=>{const t=db.transaction("blobs",mode),q=fn(t.objectStore("blobs"));t.oncomplete=()=>res(q&&q.result);t.onerror=()=>rej(t.error)}));
+  return {put:(k,v)=>tx("readwrite",st=>st.put(v,k)),get:k=>tx("readonly",st=>st.get(k)),del:k=>tx("readwrite",st=>st.delete(k))};
+})();
+const CAM_TAGS=["Buck","Doe","Hog","Turkey","Other"];
+// "YYYY:MM:DD HH:MM:SS" from a JPEG's EXIF (DateTimeOriginal, else DateTime) as "YYYY-MM-DDTHH:MM"
+function exifDate(buf){
+  try{const v=new DataView(buf); if(v.getUint16(0)!==0xFFD8) return null; let o=2;
+    while(o+4<=v.byteLength){const m=v.getUint16(o), len=v.getUint16(o+2);
+      if(m===0xFFE1&&v.getUint32(o+4)===0x45786966){
+        const t=o+10, le=v.getUint16(t)===0x4949, g16=q=>v.getUint16(q,le), g32=q=>v.getUint32(q,le);
+        const ifd=(off,want)=>{const n=g16(t+off),f={};for(let i=0;i<n;i++){const e=t+off+2+i*12,tag=g16(e);if(want.includes(tag))f[tag]={count:g32(e+4),val:g32(e+8),e}}return f};
+        const str=f=>{if(!f)return null;const at=f.count>4?t+f.val:f.e+8;let x="";for(let i=0;i<f.count-1&&at+i<v.byteLength;i++)x+=String.fromCharCode(v.getUint8(at+i));return x};
+        const i0=ifd(g32(t+4),[0x0132,0x8769]); let d=null;
+        if(i0[0x8769]){const ex=ifd(i0[0x8769].val,[0x9003,0x9004]); d=str(ex[0x9003])||str(ex[0x9004])}
+        d=d||str(i0[0x0132]);
+        const mm=d&&/^(\d{4}):(\d\d):(\d\d) (\d\d):(\d\d)/.exec(d);
+        return mm&&+mm[1]>1990?`${mm[1]}-${mm[2]}-${mm[3]}T${mm[4]}:${mm[5]}`:null;
+      }
+      if((m&0xFF00)!==0xFF00||m===0xFFDA) break; o+=2+len;
+    }
+  }catch(e){} return null;
+}
+const localStamp=d=>{const z=n=>String(n).padStart(2,"0");return `${d.getFullYear()}-${z(d.getMonth()+1)}-${z(d.getDate())}T${z(d.getHours())}:${z(d.getMinutes())}`};
+const camWhen=t=>{const d=new Date(t);return isNaN(d)?(t||"No date"):d.toLocaleString("en-US",{month:"short",day:"numeric",hour:"numeric",minute:"2-digit"})};
+// wind for the photo's hour (club time). Recent days come from the forecast API, older ones from the archive.
+async function windAtHour(t){
+  if(!/^\d{4}-\d\d-\d\dT\d\d/.test(t||"")) return null;
+  const day=t.slice(0,10), hr=t.slice(0,13)+":00";
+  const q=`latitude=${CLUB.LAT}&longitude=${CLUB.LON}&hourly=wind_direction_10m,wind_speed_10m&wind_speed_unit=mph&timezone=${encodeURIComponent(CLUB.TZ)}&start_date=${day}&end_date=${day}`;
+  for(const base of ["https://api.open-meteo.com/v1/forecast","https://archive-api.open-meteo.com/v1/archive"]){
+    try{const j=await (await fetch(base+"?"+q)).json(); const i=j.hourly?.time?.indexOf(hr);
+      if(i>=0&&j.hourly.wind_direction_10m[i]!=null) return {dir:Math.round(j.hourly.wind_direction_10m[i]),sp:Math.round(j.hourly.wind_speed_10m[i])}}catch(e){}
+  }
+  return null;
+}
+// right before a queued item is sent: attach the photo bytes, and fill in the wind if it isn't known yet
+async function prepItem(item){
+  if(item.action!=="addCamPhoto"&&item.action!=="updateCamPhoto") return item;
+  const out=Object.assign({},item);
+  if((out.action==="addCamPhoto"||out.time!=null)&&(out.windDir===""||out.windDir==null)){
+    const w=await windAtHour(out.time);
+    if(w){out.windDir=item.windDir=w.dir; out.windSp=item.windSp=w.sp; S.set("queue",QUEUE);
+      const c=CAMS.find(x=>x.id===item.id); if(c){c.windDir=w.dir;c.windSp=w.sp;saveData()}}
+  }
+  if(out._blob){ const data=await IDB.get(out._blob).catch(()=>null);
+    if(!data){const e=new Error("A trail cam photo was lost before it uploaded");e.logical=true;throw e}
+    out.photo=String(data).split(",")[1]; delete out._blob; }
+  return out;
+}
+function camSrc(c,img,size){
+  if(c.photoId){img.src=`https://drive.google.com/thumbnail?id=${encodeURIComponent(c.photoId)}&sz=${size}`;return}
+  if(c._blob) IDB.get(c._blob).then(d=>{if(d)img.src=d}).catch(()=>{});
+}
+async function shrinkPhoto(f){
+  const url=URL.createObjectURL(f);
+  try{const img=await new Promise((res,rej)=>{const i=new Image();i.onload=()=>res(i);i.onerror=rej;i.src=url});
+    const k=Math.min(1,1280/Math.max(img.width,img.height)),c=document.createElement("canvas");
+    c.width=Math.round(img.width*k);c.height=Math.round(img.height*k);c.getContext("2d").drawImage(img,0,0,c.width,c.height);
+    return c.toDataURL("image/jpeg",.75);}
+  finally{URL.revokeObjectURL(url)}
+}
+let camPin=null, camDraft=[], camFilter="All", camCur=null, camCurTag="Other";
+function openCamAdd(p){
+  if(!ME){openSignIn();return} camPin=p; camDraft=[];
+  $$("camAddMsg").textContent="Pick the photos from your trail cam. Dates come from the photos; fix any that look wrong.";
+  renderCamDraft(); $$("camGalModal").hidden=true; $$("camAddModal").hidden=false;
+}
+$$("camPick").onclick=()=>$$("camFiles").click();
+$$("camFiles").onchange=async e=>{
+  const files=[...e.target.files]; e.target.value=""; if(!files.length) return;
+  let n=0;
+  for(const f of files){
+    $$("camAddMsg").textContent=`Reading photo ${++n} of ${files.length}…`;
+    try{const buf=await f.slice(0,262144).arrayBuffer();
+      const time=exifDate(buf), data=await shrinkPhoto(f);
+      camDraft.push({data,time:time||localStamp(new Date(f.lastModified||Date.now())),fromCam:!!time,tag:"Other",note:""});
+    }catch(err){toast(`Couldn't read ${f.name}`)}
+  }
+  camDraft.sort((a,b)=>a.time.localeCompare(b.time));
+  const guessed=camDraft.filter(d=>!d.fromCam).length;
+  $$("camAddMsg").textContent=`${camDraft.length} photo${camDraft.length===1?"":"s"} ready.`+(guessed?` ${guessed} had no date inside, so they use the file's date. Check those.`:"");
+  renderCamDraft();
+};
+function renderCamDraft(){
+  const box=$$("camNew"); box.innerHTML="";
+  $$("camAllRow").hidden=camDraft.length<2;
+  const all=$$("camAll"); all.innerHTML=""; CAM_TAGS.forEach(t=>{const b=document.createElement("button");b.type="button";b.textContent=t;b.onclick=()=>{camDraft.forEach(d=>d.tag=t);renderCamDraft()};all.appendChild(b)});
+  camDraft.forEach((d,i)=>{
+    const it=document.createElement("div"); it.className="it";
+    it.innerHTML=`<img alt=""><div style="display:grid;gap:5px;min-width:0"><input type="datetime-local" value="${d.time}"><div class="filters"></div><input placeholder="Note" maxlength="300" value="${esc(d.note)}"><button type="button" class="btn" style="justify-self:start;padding:3px 9px;font-size:12px">Remove</button></div>`;
+    it.querySelector("img").src=d.data;
+    const [tIn,nIn]=it.querySelectorAll("input"); tIn.onchange=()=>{d.time=tIn.value;d.fromCam=true}; nIn.oninput=()=>{d.note=nIn.value};
+    const tg=it.querySelector(".filters"); CAM_TAGS.forEach(t=>{const b=document.createElement("button");b.type="button";b.textContent=t;b.setAttribute("aria-pressed",d.tag===t);b.onclick=()=>{d.tag=t;renderCamDraft()};tg.appendChild(b)});
+    it.querySelector(".btn").onclick=()=>{camDraft.splice(i,1);renderCamDraft()};
+    box.appendChild(it);
+  });
+  $$("camSave").disabled=!camDraft.length; $$("camSave").textContent=camDraft.length?`Save ${camDraft.length} photo${camDraft.length===1?"":"s"}`:"Save photos";
+}
+$$("camAddForm").onsubmit=async e=>{
+  e.preventDefault(); if(!camDraft.length||!camPin) return;
+  $$("camSave").disabled=true; const pin=camPin, list=camDraft.slice();
+  try{
+    for(const d of list){
+      const id="cp"+Date.now().toString(36)+Math.random().toString(36).slice(2,6), key="cam:"+id;
+      await IDB.put(key,d.data);
+      CAMS.push({id,pinId:pin.id,time:d.time,tag:d.tag,note:d.note.trim().slice(0,300),by:ME.name,windDir:"",windSp:"",_blob:key,_pending:true});
+      QUEUE.push({action:"addCamPhoto",id,pinId:pin.id,time:d.time,tag:d.tag,note:d.note.trim().slice(0,300),windDir:"",windSp:"",_blob:key});
+    }
+  }catch(err){toast("This phone couldn't store the photos. Free up some space and try again.");$$("camSave").disabled=false;return}
+  S.set("queue",QUEUE); saveData(); camDraft=[]; $$("camAddModal").hidden=true;
+  toast(`${list.length} photo${list.length===1?"":"s"} saved. They upload when you have signal.`);
+  openCamGallery(pin); sync();
+};
+function openCamGallery(p){ camPin=p; camFilter="All"; $$("camGalTitle").textContent=p.note?p.note.slice(0,40):"Trail cam"; renderCamGallery(); $$("camGalModal").hidden=false; }
+function renderCamGallery(){
+  if(!camPin) return;
+  const all=CAMS.filter(c=>c.pinId===camPin.id).sort((a,b)=>String(b.time).localeCompare(String(a.time)));
+  const f=$$("camFilt"); f.innerHTML="";
+  ["All",...CAM_TAGS].forEach(t=>{const n=t==="All"?all.length:all.filter(c=>c.tag===t).length; if(t!=="All"&&!n) return;
+    const b=document.createElement("button");b.type="button";b.setAttribute("aria-pressed",camFilter===t);b.textContent=`${t} ${n}`;b.onclick=()=>{camFilter=t;renderCamGallery()};f.appendChild(b)});
+  const g=$$("camGrid"); g.innerHTML="";
+  const shown=all.filter(c=>camFilter==="All"||c.tag===camFilter);
+  if(!shown.length) g.innerHTML='<div class="note" style="grid-column:1/-1">No photos yet. Tap Add photos.</div>';
+  shown.forEach(c=>{const b=document.createElement("button");b.type="button";b.innerHTML=`<img alt="" loading="lazy"><span class="cap">${esc(c.tag)} · ${esc(camWhen(c.time))}${c._pending?" · waiting":""}</span>`;
+    camSrc(c,b.querySelector("img"),"w400"); b.onclick=()=>openCamView(c); g.appendChild(b)});
+}
+$$("camGalAdd").onclick=()=>openCamAdd(camPin);
+function openCamView(c){
+  camCur=c; camCurTag=c.tag||"Other"; const img=$$("camBig"); img.removeAttribute("src"); camSrc(c,img,"w1600");
+  const w=c.windDir!==""&&c.windDir!=null?`Wind ${card(+c.windDir)} ${c.windSp} mph`:(c._pending?"Wind is looked up when it uploads":"Wind unknown");
+  $$("camInfo").textContent=`${camWhen(c.time)} · ${w} · ${c.by||"Someone"}${c._pending?" · waiting to upload":""}`;
+  $$("camTime").value=c.time||""; $$("camNote").value=c.note||"";
+  const mine=canEdit(c); ["camTime","camNote"].forEach(i=>$$(i).disabled=!mine); $$("camUpd").hidden=!mine; $$("camDel").hidden=!mine;
+  $$("camDel").dataset.sure=""; $$("camDel").textContent="Delete photo"; renderCamTags(mine);
+  $$("camGalModal").hidden=true; $$("camViewModal").hidden=false;
+}
+function renderCamTags(mine){const box=$$("camTags");box.innerHTML="";CAM_TAGS.forEach(t=>{const b=document.createElement("button");b.type="button";b.textContent=t;b.disabled=!mine;b.setAttribute("aria-pressed",camCurTag===t);b.onclick=()=>{camCurTag=t;renderCamTags(mine)};box.appendChild(b)})}
+$$("camBack").onclick=()=>{$$("camViewModal").hidden=true;renderCamGallery();$$("camGalModal").hidden=false};
+$$("camViewForm").onsubmit=e=>{
+  e.preventDefault(); const c=camCur; if(!c||!canEdit(c)) return;
+  const time=$$("camTime").value||c.time, timeChanged=time!==c.time;
+  c.time=time; c.tag=camCurTag; c.note=$$("camNote").value.trim().slice(0,300);
+  if(timeChanged){c.windDir="";c.windSp=""}
+  if(c._pending){const q=QUEUE.find(x=>x.action==="addCamPhoto"&&x.id===c.id); if(q){Object.assign(q,{time:c.time,tag:c.tag,note:c.note,windDir:c.windDir,windSp:c.windSp});S.set("queue",QUEUE);saveData()}}
+  else{const u={action:"updateCamPhoto",id:c.id,tag:c.tag,note:c.note}; if(timeChanged)Object.assign(u,{time:c.time,windDir:"",windSp:""}); enqueue(u)}
+  toast("Photo updated"); $$("camBack").click();
+};
+$$("camDel").onclick=()=>{
+  const b=$$("camDel"), c=camCur; if(!c) return; if(!b.dataset.sure){b.dataset.sure=1;b.textContent="Tap again to delete";return}
+  CAMS=CAMS.filter(x=>x.id!==c.id);
+  if(c._pending){QUEUE=QUEUE.filter(x=>!(x.action==="addCamPhoto"&&x.id===c.id)); if(c._blob) IDB.del(c._blob).catch(()=>{}); S.set("queue",QUEUE); saveData()}
+  else enqueue({action:"deleteCamPhoto",id:c.id});
+  toast("Photo deleted"); $$("camBack").click();
+};
 
 /* ---------- deer trails: shared with the club, colored by use ---------- */
 const TRAIL_USE={Heavy:{c:"#ff4d1a",w:5},Moderate:{c:"#ffa726",w:4},Light:{c:"#ffe082",w:3}};
