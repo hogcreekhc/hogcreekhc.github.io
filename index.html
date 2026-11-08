@@ -132,6 +132,11 @@ label.f{display:grid;gap:4px;font:500 12px var(--mono);color:var(--muted);text-t
 .navbar,.toolbar{position:fixed;z-index:1002;left:max(10px,env(safe-area-inset-left,0px));right:max(10px,env(safe-area-inset-right,0px));top:calc(env(safe-area-inset-top,0px) + 100px);display:flex;align-items:center;gap:10px;background:rgba(20,26,18,.95);border:1px solid #4aa3ff;border-radius:14px;padding:9px 10px;box-shadow:0 6px 18px rgba(0,0,0,.45)}
 .toolbar{border-color:var(--line)}
 .toolbar.blood{border-color:#c0392b}
+.toolbar.rec{border-color:#e53935}
+.recdot{display:inline-block;width:11px;height:11px;border-radius:50%;background:#e53935;margin-right:8px;vertical-align:middle;animation:recblink 1.2s infinite}
+@keyframes recblink{50%{opacity:.25}}
+#trackList .trk{display:grid;gap:4px}
+#trackList .trk .m{color:var(--muted);font-size:12.5px}
 .navarrow{width:44px;height:44px;border-radius:50%;background:#1d4f86;display:grid;place-items:center;flex:none;transition:transform .3s}
 .navt{font:700 19px var(--display);letter-spacing:.02em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .navs{font:12.5px var(--mono);color:var(--muted)}
@@ -288,7 +293,10 @@ input[type=range]{padding:0;accent-color:var(--accent)}
       <div class="layers" id="overLayers"></div>
       <div class="sec">Tools</div>
       <div class="row"><button class="btn" id="btnMeasure">Measure distance / area</button><button class="btn" id="btnBlood">Start a blood trail</button></div>
-      <div class="row"><button class="btn" id="btnFit">Zoom to property</button><button class="btn" id="btnClearTrack">Clear my track</button></div>
+      <div class="row"><button class="btn" id="btnFit">Zoom to property</button><button class="btn" id="btnTrack">Start a track</button></div>
+      <div class="sec">Saved tracks <span style="text-transform:none;letter-spacing:0">(on this phone)</span></div>
+      <div class="layers" id="trackList"></div>
+      <div class="row"><button class="btn danger" id="btnClearTracks" hidden>Clear all tracks</button></div>
     </section>
 
     <section class="pane" id="p-settings">
@@ -313,7 +321,7 @@ input[type=range]{padding:0;accent-color:var(--accent)}
       <button class="btn" id="btnOffline">Save the lease map for no-signal use</button>
       <div class="status" id="offlineStatus"></div>
       <p class="note">Club admins add or remove members in the Members tab of the club sheet. Removing someone's row locks that phone out on its next sync.</p>
-      <p class="note">On iPhone: tap Share, then <b>Add to Home Screen</b> to use this like an app. Keep the screen on while walking so your track records. Tap "Save the lease map" at home on Wi-Fi and the map works on the lease with no signal. Pins and check-ins save on the phone and upload as soon as you get a bar.</p>
+      <p class="note">On iPhone: tap Share, then <b>Add to Home Screen</b> to use this like an app. To record a walk, use Map &gt; Start a track and keep the app open until you tap Stop. Tap "Save the lease map" at home on Wi-Fi and the map works on the lease with no signal. Pins and check-ins save on the phone and upload as soon as you get a bar.</p>
       <p class="note">Weather: Open-Meteo. Moon: computed on your phone. Imagery: Esri, USGS 3DEP LiDAR.</p>
     </section>
   </div>
@@ -420,6 +428,11 @@ input[type=range]{padding:0;accent-color:var(--accent)}
   <button class="btn" id="navStop">Stop</button>
 </div>
 
+<div class="toolbar rec" id="recBar" hidden>
+  <div style="flex:1;min-width:0"><div class="navt"><span class="recdot"></span>Recording</div><div class="navs" id="recSub">Waiting for GPS…</div></div>
+  <button class="btn primary" id="recStop">Stop</button>
+</div>
+
 <div class="toolbar" id="measureBar" hidden>
   <div style="flex:1;min-width:0"><div class="navt" id="measTxt">Tap the map to add points</div><div class="navs" id="measSub">2 points for distance, 3 or more for area</div></div>
   <button class="btn" id="measUndo">Undo</button><button class="btn" id="measDone">Done</button>
@@ -448,6 +461,24 @@ input[type=range]{padding:0;accent-color:var(--accent)}
 <div class="toolbar" id="pickBar" hidden>
   <div style="flex:1;min-width:0"><div class="navt">Place the stand</div><div class="navs">Move the map until the crosshair is on it</div></div>
   <button class="btn primary" id="pickUse">Use this spot</button><button class="btn" id="pickCancel">Cancel</button>
+</div>
+
+<div class="modal" id="trackModal" hidden>
+  <form class="card" id="trackForm">
+    <h2>Save track</h2>
+    <label class="f">Name<input id="trkName" maxlength="60" required></label>
+    <div class="status" id="trkInfo"></div>
+    <div class="row"><button class="btn primary" type="submit">Save track</button><button class="btn danger" type="button" id="trkDiscard">Discard</button></div>
+  </form>
+</div>
+
+<div class="modal" id="routeModal" hidden>
+  <form class="card" id="routeForm">
+    <h2>Walk-in route</h2>
+    <p class="note" id="routeInfo"></p>
+    <label class="f">For which stand<select id="routeStand"></select></label>
+    <div class="row"><button class="btn primary" type="submit">Set as walk-in route</button><button class="btn" type="button" data-close>Back</button></div>
+  </form>
 </div>
 
 <div class="modal" id="propModal" hidden>
@@ -491,6 +522,7 @@ input[type=range]{padding:0;accent-color:var(--accent)}
     <label class="f">How to walk in<textarea id="stWalk" rows="2" maxlength="300" placeholder="End of main road, then 150 m west"></textarea></label>
     <div class="status" id="stMsg"></div>
     <div class="row"><button class="btn primary" type="submit">Save stand</button><button class="btn" type="button" data-close>Cancel</button><button class="btn danger" type="button" id="stDelete">Delete stand</button></div>
+    <div class="row"><button class="btn" type="button" id="stRouteDel" hidden>Remove walk-in route</button></div>
   </form>
 </div>
 
@@ -509,6 +541,7 @@ const PIN_TYPES = [
   {k:"scrape", name:"Scrape",     c:"#ff3b8b", g:"Sc"},
   {k:"rub",    name:"Rub",        c:"#c2702b", g:"Rb"},
   {k:"turkey", name:"Turkey spot",c:"#b5432f", g:"Tk"},
+  {k:"squirrel",name:"Squirrel area",c:"#a0622d",g:'<span style="font-size:15px;line-height:1">🐿️</span>'},
   {k:"duck",   name:"Duck spot",  c:"#2f8fd0", g:"Dk"},
   {k:"dblind", name:"Duck blind", c:"#1d5f99", g:"DB"},
   {k:"cam",    name:"Trail cam",  c:"#6b6b6b", g:"Cm"},
@@ -562,16 +595,18 @@ const standLayer=L.layerGroup(); ov["Stands"]=standLayer;
 const oldLayer=L.layerGroup(); ov["Old stand pins"]=oldLayer;
 const pinLayer=L.layerGroup(); ov["Club pins"]=pinLayer;
 const coneLayer=L.layerGroup(); ov["Scent cones"]=coneLayer;
-const trackLayer=L.layerGroup(); ov["My track"]=trackLayer;
+const trackLayer=L.layerGroup(); ov["Tracks"]=trackLayer;
+const routeLayer=L.layerGroup(); ov["Walk-in routes"]=routeLayer;
 const hunterLayer=L.layerGroup(); ov["Hunters"]=hunterLayer;
 const mateLayer=L.layerGroup(); ov["Members sharing location"]=mateLayer;
 const taskLayer=L.layerGroup(); ov["Work list"]=taskLayer;
 const harvLayer=L.layerGroup(); ov["Harvests"]=harvLayer;
 const navLayer=L.layerGroup().addTo(map), measLayer=L.layerGroup().addTo(map), bloodLayer=L.layerGroup().addTo(map);
-const defaultsOn=["Public land (WMA)","Neighbor lines","Members sharing location","Work list","Harvests","Hunters","Boundary","Scrape line","Roads","Camp","Stands","Club pins","Scent cones","My track"];
-let ovOn=S.get("ov",defaultsOn).map(n=>({"Blowdown & scrape line":"Scrape line","Slope (flat / steep)":SLOPE})[n]||n);
+const defaultsOn=["Public land (WMA)","Neighbor lines","Members sharing location","Work list","Harvests","Hunters","Boundary","Scrape line","Roads","Camp","Stands","Club pins","Scent cones","Tracks","Walk-in routes"];
+let ovOn=S.get("ov",defaultsOn).map(n=>({"Blowdown & scrape line":"Scrape line","Slope (flat / steep)":SLOPE,"My track":"Tracks"})[n]||n);
 // one time: contours used to start on over the aerial; turn them off once (members can switch them back on)
 if(S.get("ovV",0)<1){ ovOn=ovOn.filter(n=>n!=="10 ft contours"); S.set("ov",ovOn); S.set("ovV",1); }
+if(S.get("ovV",0)<2){ if(!ovOn.includes("Walk-in routes")) ovOn.push("Walk-in routes"); S.set("ov",ovOn); S.set("ovV",2); }
 Object.entries(ov).forEach(([n,l])=>{if(ovOn.includes(n)) l.addTo(map)});
 function fitLease(){if(!LEASE)return;const h=document.body.classList.contains("min")?70:Math.round(innerHeight*.44)+10;map.fitBounds(leaseBounds(),{paddingTopLeft:[20,110],paddingBottomRight:[70,h]})}
 // All of the club's properties. Older backends only sent one boundary.
@@ -579,7 +614,7 @@ function props(){if(!LEASE)return[];return (LEASE.properties&&LEASE.properties.l
 function leaseBounds(){const b=L.latLngBounds([]);props().forEach(p=>p.boundary.forEach(q=>b.extend(q)));return b}
 const standMarkers={}, propPolys={};
 function buildLease(fit){
-  ["Boundary","Scrape line","Roads","Camp","Neighbor lines","Public land (WMA)"].forEach(k=>ov[k].clearLayers());
+  ["Boundary","Scrape line","Roads","Camp","Neighbor lines","Public land (WMA)","Walk-in routes"].forEach(k=>ov[k].clearLayers());
   standLayer.clearLayers(); oldLayer.clearLayers();
   if(!LEASE) return;
   props().forEach(p=>{
@@ -597,6 +632,8 @@ function buildLease(fit){
   (LEASE.stands||[]).forEach(s=>{
     const m=L.marker(s.ll,{icon:L.divIcon({className:"lbl",html:`<div class="stand-ic">${esc(s.id)}</div>`,iconSize:[34,34],iconAnchor:[17,17]}),zIndexOffset:500});
     m.bindPopup(()=>standPopup(s)); m.addTo(standLayer); standMarkers[s.id]=m;
+    if(Array.isArray(s.route)&&s.route.length>1){L.polyline(s.route,{color:"#000",weight:6,opacity:.35,interactive:false}).addTo(routeLayer);
+      L.polyline(s.route,{color:"#7df9ff",weight:3,dashArray:"2 7",lineCap:"round"}).bindPopup(`<h4>Walk-in route to ${esc(s.id)}</h4><div class="pop-m">${yd(lineLen(s.route))} yd</div>`).addTo(routeLayer)}
     if(s.facing!=null&&isFinite(s.facing)) L.marker(s.ll,{icon:L.divIcon({className:"lbl",html:`<div class="face-ic" style="transform:rotate(${+s.facing}deg)"><svg viewBox="0 0 70 70"><path d="M35 1 L44 15 L26 15 Z" fill="#fff" stroke="#111" stroke-width="1.5" stroke-linejoin="round"/></svg></div>`,iconSize:[70,70],iconAnchor:[35,35]}),interactive:false,zIndexOffset:490}).addTo(standLayer);
   });
   (LEASE.oldPins||[]).forEach(p=>{
@@ -828,7 +865,7 @@ function drawCones(){
   if(map.hasLayer(pinLayer)&&pinFilter.has("stand")) PINS.filter(p=>!p.deleted&&p.type==="stand").forEach(p=>cone([+p.lat,+p.lon],"#ffffff"));
 }
 function standPopup(s){
-  let html=`<h4>${esc(s.id)} · ${esc(s.name)}</h4><div>${esc(s.type)}${s.kids?" · kid friendly":""}${s.facing!=null&&isFinite(s.facing)?` · faces ${card(+s.facing)}`:""}</div><div style="margin-top:4px">${esc(s.why)}</div><div class="pop-m" style="margin-top:4px">Walk in: ${esc(s.walk)}</div>`;
+  let html=`<h4>${esc(s.id)} · ${esc(s.name)}</h4><div>${esc(s.type)}${s.kids?" · kid friendly":""}${s.facing!=null&&isFinite(s.facing)?` · faces ${card(+s.facing)}`:""}</div><div style="margin-top:4px">${esc(s.why)}</div><div class="pop-m" style="margin-top:4px">Walk in: ${esc(s.walk)}</div>${Array.isArray(s.route)&&s.route.length>1?`<div class="pop-m" style="color:#7df9ff">Walk-in route: ${yd(lineLen(s.route))} yd. Guide me follows it.</div>`:""}`;
   if(WX){const i=wxIndex(new Date()); if(i>=0){const w=windFit(s,WX.hourly.wind_direction_10m[i]); html+=`<div class="pop-m">Wind now ${card(WX.hourly.wind_direction_10m[i])}: <span class="${w.f>=1?'g':w.f>=.5?'o':'b'}">${w.txt}</span></div>`}}
   if(me) html+=`<div class="pop-m">${yd(dist(me,s.ll))} yd from you, heading ${card(bearing(me,s.ll))}</div>`;
   html+=`<div class="pop-m">${s.ll[0]}, ${s.ll[1]}</div>`;
@@ -850,15 +887,14 @@ function withHuntButton(html,spot){
   if(upcoming.length) d.insertAdjacentHTML("beforeend",`<div class="pop-m" style="margin-top:4px;color:var(--ok)">Reserved: ${upcoming.map(r=>`${esc(r.name)} ${r.date===dayKey(new Date())?"today":esc(r.date.slice(5))} ${esc(r.slot.toLowerCase())}`).join("; ")}</div>`);
   const row=document.createElement("div"); row.className="mini"; row.style.marginTop="8px"; d.appendChild(row);
   if(ME){const b=document.createElement("button");b.className="btn primary";b.textContent="I'm hunting here";b.onclick=()=>{checkIn(spot);map.closePopup()};row.appendChild(b)}
-  {const g=document.createElement("button");g.className="btn";g.textContent="Guide me";g.onclick=()=>{map.closePopup();guideTo(spot.label,spot.ll)};row.appendChild(g)}
+  {const g=document.createElement("button");g.className="btn";g.textContent="Guide me";g.onclick=()=>{map.closePopup();const st=(LEASE?.stands||[]).find(x=>x.id===spot.stand);guideTo(spot.label,spot.ll,st?.route)};row.appendChild(g)}
   if(ME&&!String(spot.stand).startsWith("gps")){const r=document.createElement("button");r.className="btn";r.textContent="Reserve";r.onclick=()=>{map.closePopup();openReserve(spot.stand)};row.appendChild(r)}
   return d;
 }
 
 /* ---------- GPS ---------- */
 let me=null, meMarker=null, meCircle=null, watchId=null, follow=false;
-let track=S.get("track",{day:"",pts:[]}); if(track.day!==dayKey(new Date())) track={day:dayKey(new Date()),pts:[]};
-const trackLine=L.polyline(track.pts,{color:"#4aa3ff",weight:3,opacity:.8}).addTo(trackLayer);
+S.set("track",null);   // the old all-day track is gone; tracks are recorded with Start/Stop now
 function startGps(){
   if(!("geolocation" in navigator)){toast("This phone can't share location");return}
   if(watchId!=null){follow=!follow;updateLocateBtn();if(follow&&me)map.setView(me,Math.max(map.getZoom(),17));return}
@@ -887,8 +923,7 @@ function onPos(p){
   document.getElementById("gpsDot").classList.add("on");
   let near=null,nd=1e9; (LEASE.stands||[]).forEach(s=>{const d=dist(me,s.ll);if(d<nd){nd=d;near=s}});
   document.getElementById("gpsTxt").textContent=`${sharingNow()?"Sharing · ":""}${inside?"On lease":"Off lease"}${near?` · ${near.id} ${yd(nd)} yd ${card(bearing(me,near.ll))}`:""}`;
-  const last=track.pts[track.pts.length-1];
-  if(acc<40&&(!last||dist(last,me)>8)){track.pts.push(me);trackLine.setLatLngs(track.pts);S.set("track",track)}
+  recPos(me,acc);
 }
 let lastHeading=null, compassLive=false;
 function setHeading(h){
@@ -923,6 +958,9 @@ map.on("dragstart",()=>{if(follow){follow=false;updateLocateBtn()}});
 let PINS=S.get("pins",[]); let QUEUE=S.get("queue",[]);
 let CHECKINS=S.get("checkins",[]);
 const pinFilter=new Set(S.get("pinFilter",PIN_TYPES.map(t=>t.k)));
+// pin types added later start shown, even on phones that saved a filter before they existed
+{const known=S.get("pinKnown",["stand","scrape","rub","turkey","duck","dblind","cam","harvest","blood","note"]);
+ PIN_TYPES.forEach(t=>{if(!known.includes(t.k))pinFilter.add(t.k)}); S.set("pinKnown",PIN_TYPES.map(t=>t.k)); S.set("pinFilter",[...pinFilter])}
 function pinIcon(t){return L.divIcon({className:"lbl",html:`<div class="picon" style="background:${t.c}">${t.g}</div>`,iconSize:[26,26],iconAnchor:[13,13]})}
 function renderPins(){
   pinLayer.clearLayers(); if(typeof drawCones==="function") drawCones();
@@ -1170,7 +1208,7 @@ function renderLayers(){
   Object.keys(ov).forEach(n=>{const l=document.createElement("label");l.innerHTML=`<span>${n}</span><input type="checkbox" class="sw" role="switch" ${map.hasLayer(ov[n])?"checked":""}>`;l.querySelector("input").onchange=e=>{e.target.checked?ov[n].addTo(map):map.removeLayer(ov[n]);S.set("ov",Object.keys(ov).filter(k=>map.hasLayer(ov[k])))};ol.appendChild(l)});
 }
 document.getElementById("btnFit").onclick=()=>{collapse(true);setTimeout(fitLease,260)};
-document.getElementById("btnClearTrack").onclick=()=>{track={day:dayKey(new Date()),pts:[]};trackLine.setLatLngs([]);S.set("track",track);toast("Track cleared")};
+
 
 /* ---------- settings ---------- */
 const $=id=>document.getElementById(id);
@@ -1257,8 +1295,8 @@ function renderLight(){
 /* ---------- guide me ---------- */
 let navTarget=null;
 const navLine=L.polyline([],{color:"#4aa3ff",weight:4,dashArray:"8 8",interactive:false}).addTo(navLayer);
-function guideTo(label,ll){
-  navTarget={label,ll:[+ll[0],+ll[1]],arrived:false}; $$("navBar").hidden=false;
+function guideTo(label,ll,route){
+  navTarget={label,ll:[+ll[0],+ll[1]],arrived:false,route:Array.isArray(route)&&route.length>1?route:null}; $$("navBar").hidden=false;
   if(!me){startCompass();startGps()} else {follow=true;updateLocateBtn();map.setView(me,Math.max(map.getZoom(),17))}
   collapse(true); updateNav();
 }
@@ -1266,13 +1304,97 @@ function updateNav(){
   if(!navTarget) return;
   $$("navTitle").textContent=navTarget.label;
   if(!me){$$("navSub").textContent="Waiting for GPS…";return}
-  const d=dist(me,navTarget.ll), br=bearing(me,navTarget.ll);
-  navLine.setLatLngs([me,navTarget.ll]);
-  $$("navSub").textContent=`${yd(d)} yd · head ${card(br)}${lastHeading==null?" (arrow is north-up)":""}`;
+  const d=dist(me,navTarget.ll); let br=bearing(me,navTarget.ll), sub=`${yd(d)} yd`;
+  if(navTarget.route&&d>=12){
+    // follow the walk-in route: head for the next route point ahead of you; off the route (>60 m), head for its nearest point
+    const R=navTarget.route; let k=0,best=1e9; R.forEach((q,i)=>{const e=dist(me,q); if(e<best){best=e;k=i}});
+    let j=k; if(best<=60) while(j<R.length-1&&dist(me,R[j])<20) j++;
+    const done=best<=60&&dist(me,R[j])<20, path=done?[me,navTarget.ll]:[me,...R.slice(j),navTarget.ll];
+    navLine.setLatLngs(path); br=bearing(me,path[1]);
+    sub=`${best>60?"Get to the route":"On the route"} · ${yd(lineLen(path))} yd to go`;
+  } else navLine.setLatLngs([me,navTarget.ll]);
+  $$("navSub").textContent=`${sub} · head ${card(br)}${lastHeading==null?" (arrow is north-up)":""}`;
   $$("navArrow").style.transform=`rotate(${lastHeading==null?br:br-lastHeading}deg)`;
   if(d<12&&!navTarget.arrived){navTarget.arrived=true;toast(`You're at ${navTarget.label}`)}
 }
 function stopNav(){navTarget=null;navLine.setLatLngs([]);$$("navBar").hidden=true}
+
+/* ---------- tracks: Start/Stop recording, saved on this phone ---------- */
+const TRACK_COLORS=["#4aa3ff","#ff9f1a","#c77dff","#00e0b0","#ff5c8a","#ffe14d"];
+let REC=S.get("rec",null), TRACKS=S.get("tracks",[]);
+const recLine=L.polyline(REC?REC.pts:[],{color:"#e53935",weight:4,opacity:.9,interactive:false}).addTo(trackLayer);
+const trackLines={};
+function lineLen(pts){let t=0;for(let i=1;i<pts.length;i++)t+=dist(pts[i-1],pts[i]);return t}
+const miles=m=>(m/1609.34).toFixed(2)+" mi";
+function recPos(ll,acc){
+  if(!REC||acc>40) return; const last=REC.pts[REC.pts.length-1];
+  if(last&&dist(last,ll)<8) return;
+  REC.pts.push([ll[0],ll[1]]); recLine.setLatLngs(REC.pts); S.set("rec",REC); renderRec();
+}
+function renderRec(){
+  $$("recBar").hidden=!REC; if(!REC) return;
+  $$("recSub").textContent=REC.pts.length>1?`${miles(lineLen(REC.pts))} · ${Math.round((Date.now()-REC.start)/60000)} min · keep the app open`:"Waiting for GPS… keep the app open";
+}
+function startTrack(){
+  if(REC){toast("Already recording");return}
+  REC={start:Date.now(),pts:[]}; S.set("rec",REC); recLine.setLatLngs([]);
+  if(!map.hasLayer(trackLayer)) trackLayer.addTo(map);
+  startCompass(); if(watchId==null) startGps(); else {follow=true;updateLocateBtn()}
+  keepAwake(true); collapse(true); renderRec(); toast("Recording. The screen stays on until you tap Stop.");
+}
+function stopTrack(){
+  if(!REC) return; keepAwake(false);
+  if(REC.pts.length<2){REC=null;S.set("rec",null);recLine.setLatLngs([]);renderRec();toast("Nothing recorded, so nothing was saved");return}
+  $$("trkName").value="Walk "+new Date(REC.start).toLocaleString("en-US",{timeZone:CLUB.TZ,weekday:"short",month:"numeric",day:"numeric",hour:"numeric",minute:"2-digit"});
+  $$("trkInfo").textContent=`${miles(lineLen(REC.pts))} · ${Math.round((Date.now()-REC.start)/60000)} min`;
+  $$("trkDiscard").dataset.sure=""; $$("trkDiscard").textContent="Discard"; $$("trackModal").hidden=false;
+}
+function endRec(){REC=null;S.set("rec",null);recLine.setLatLngs([]);$$("trackModal").hidden=true;renderRec()}
+$$("btnTrack").onclick=startTrack; $$("recStop").onclick=stopTrack;
+$$("trackForm").onsubmit=e=>{
+  e.preventDefault(); if(!REC) return;
+  const t={id:Date.now().toString(36),name:$$("trkName").value.trim().slice(0,60)||"Track",date:new Date(REC.start).toISOString(),pts:REC.pts.map(q=>[r6(q[0]),r6(q[1])]),shown:false};
+  TRACKS.unshift(t); S.set("tracks",TRACKS); endRec(); renderTracks(); toast(`Saved "${t.name}". It's under Map > Saved tracks.`);
+};
+$$("trkDiscard").onclick=()=>{const b=$$("trkDiscard"); if(!b.dataset.sure){b.dataset.sure=1;b.textContent="Tap again to discard";return} endRec(); toast("Track discarded")};
+function saveTracks(){S.set("tracks",TRACKS);renderTracks()}
+function renderTracks(){
+  Object.keys(trackLines).forEach(k=>{trackLayer.removeLayer(trackLines[k]);delete trackLines[k]});
+  TRACKS.forEach((t,i)=>{ if(t.shown) trackLines[t.id]=L.polyline(t.pts,{color:TRACK_COLORS[i%TRACK_COLORS.length],weight:4,opacity:.85})
+    .bindPopup(`<h4>${esc(t.name)}</h4><div class="pop-m">${miles(lineLen(t.pts))}</div>`).addTo(trackLayer) });
+  const box=$$("trackList"); box.innerHTML="";
+  if(!TRACKS.length) box.innerHTML='<div class="note">No saved tracks. Tap Start a track, walk, then tap Stop.</div>';
+  TRACKS.forEach((t,i)=>{
+    const w=document.createElement("div"); w.className="trk";
+    w.innerHTML=`<label><span><b style="color:${TRACK_COLORS[i%TRACK_COLORS.length]}">━</b> ${esc(t.name)}<br><span class="m">${new Date(t.date).toLocaleDateString("en-US",{timeZone:CLUB.TZ,month:"short",day:"numeric"})} · ${miles(lineLen(t.pts))}</span></span><input type="checkbox" class="sw" role="switch" ${t.shown?"checked":""}></label><div class="mini"></div>`;
+    w.querySelector("input").onchange=e=>{t.shown=e.target.checked; if(t.shown&&!map.hasLayer(trackLayer)) trackLayer.addTo(map); saveTracks()};
+    const row=w.querySelector(".mini"), btn=(txt,fn,cls)=>{const b=document.createElement("button");b.type="button";b.className="btn"+(cls?" "+cls:"");b.textContent=txt;b.onclick=()=>fn(b);row.appendChild(b)};
+    btn("Show on map",()=>{t.shown=true;if(!map.hasLayer(trackLayer))trackLayer.addTo(map);saveTracks();collapse(true);setTimeout(()=>map.fitBounds(L.latLngBounds(t.pts).pad(.25)),260)});
+    if(ME?.admin&&LEASE?.stands?.length) btn("Walk-in route…",()=>openRoute(t));
+    btn("Delete",b=>{if(!b.dataset.sure){b.dataset.sure=1;b.textContent="Tap again to delete";return} TRACKS=TRACKS.filter(x=>x.id!==t.id);saveTracks();toast("Track deleted")},"danger");
+    box.appendChild(w);
+  });
+  $$("btnClearTracks").hidden=!TRACKS.length; $$("btnClearTracks").dataset.sure=""; $$("btnClearTracks").textContent="Clear all tracks";
+}
+$$("btnClearTracks").onclick=()=>{const b=$$("btnClearTracks"); if(!b.dataset.sure){b.dataset.sure=1;b.textContent="Tap again to delete every saved track";return} TRACKS=[];saveTracks();toast("All tracks cleared")};
+
+/* ----- walk-in routes (admin): a saved track becomes the route to a stand, shared with the club ----- */
+let routeTrack=null;
+function openRoute(t){
+  routeTrack=t; const end=t.pts[t.pts.length-1], start=t.pts[0];
+  const near=s=>Math.min(dist(s.ll,start),dist(s.ll,end));
+  const sel=$$("routeStand"); sel.innerHTML="";
+  LEASE.stands.slice().sort((a,b)=>near(a)-near(b)).forEach(s=>{const o=document.createElement("option");o.value=s.id;o.textContent=`${s.id} ${s.name} (${yd(near(s))} yd from the track's end)${s.route?" · has a route":""}`;sel.appendChild(o)});
+  $$("routeInfo").textContent=`"${t.name}", ${miles(lineLen(t.pts))}. Everyone will see it on the map, and Guide me to that stand will follow it.`;
+  $$("routeModal").hidden=false;
+}
+$$("routeForm").onsubmit=e=>{
+  e.preventDefault(); const s=LEASE.stands.find(x=>x.id===$$("routeStand").value); if(!s||!routeTrack) return;
+  let pts=routeTrack.pts.map(q=>[r6(q[0]),r6(q[1])]);
+  if(dist(pts[0],s.ll)<dist(pts[pts.length-1],s.ll)) pts.reverse();   // the route ends at the stand
+  s.route=pts; $$("routeModal").hidden=true; saveLease();
+  enqueue({action:"setRoute",id:s.id,route:pts}); toast(`Walk-in route set for ${s.id}`);
+};
 $$("navStop").onclick=stopNav;
 
 /* ---------- reservations ---------- */
@@ -1577,7 +1699,7 @@ $$("btnMeasure").onclick=startMeasure;
 /* ---------- floating bars stack under the top chips ---------- */
 function placeBars(){
   let y=document.querySelector(".top").getBoundingClientRect().bottom+8;
-  ["navBar","bloodBar","measureBar","editBar","pickBar","pinPickBar"].forEach(id=>{const el=$$(id); if(!el.hidden){el.style.top=y+"px"; y+=el.offsetHeight+8}});
+  ["recBar","navBar","bloodBar","measureBar","editBar","pickBar","pinPickBar"].forEach(id=>{const el=$$(id); if(!el.hidden){el.style.top=y+"px"; y+=el.offsetHeight+8}});
 }
 new MutationObserver(placeBars).observe(document.body,{subtree:true,attributes:true,attributeFilter:["hidden"]});
 addEventListener("resize",placeBars);
@@ -1648,7 +1770,7 @@ let syncTimer=null;
 function resetSyncTimer(){ clearInterval(syncTimer); syncTimer=setInterval(()=>{if(document.visibilityState==="visible")sync()},(sharingNow()||LOCS.length)?20000:45000) }
 
 /* ================= property editor (admin only) ================= */
-const LEASE_ACTIONS=["saveProperty","removeProperty","saveStand","deleteStand"];
+const LEASE_ACTIONS=["saveProperty","removeProperty","saveStand","deleteStand","setRoute"];
 const PROP_COLORS=["#ffd600","#00d0ff","#ff7ad9","#7dff6a","#ff9f1a","#ffffff"];
 function ringArea(r){ // square meters on the sphere
   if(!r||r.length<3) return 0; let s=0;
@@ -1837,6 +1959,7 @@ function openStandEditor(s,keep){
     [["stAm","am",1],["stPm","pm",1],["stMid","mid",.4],["stRut","rutMid",.7]].forEach(([id,k,d])=>$$(id).value=Math.round(10*(s?(+s[k]||0):d)));
     $$("stKids").checked=s?!!s.kids:true; $$("stWhy").value=s?.why||""; $$("stWalk").value=s?.walk||"";
     $$("stDelete").hidden=!s; $$("stDelete").dataset.sure=""; $$("stDelete").textContent="Delete stand";
+    $$("stRouteDel").hidden=!(s&&Array.isArray(s.route)&&s.route.length>1);
     const sel=$$("stProp"); sel.innerHTML=""; props().forEach(p=>{const o=document.createElement("option");o.value=p.id;o.textContent=p.name||p.id;sel.appendChild(o)});
     sel.value=s?.propertyId||propFor(STE.ll); $$("stPropWrap").hidden=props().length<2;
   }
@@ -1882,10 +2005,12 @@ $$("standForm").onsubmit=e=>{
   const st={id,propertyId:$$("stProp").value||propFor(STE.ll),name:$$("stName").value.trim().slice(0,60)||id,type:$$("stType").value.trim().slice(0,40),ll:STE.ll.slice(),
     winds:STE.windsDirty||!STE.orig?windsFromDirs(STE.dirs):STE.orig.winds,am:+$$("stAm").value/10,pm:+$$("stPm").value/10,mid:+$$("stMid").value/10,rutMid:+$$("stRut").value/10,
     kids:$$("stKids").checked,why:$$("stWhy").value.trim().slice(0,300),walk:$$("stWalk").value.trim().slice(0,300),facing:STE.facing};
+  if(STE.orig&&STE.orig.route) st.route=STE.orig.route;
   const list=(LEASE.stands||[]).slice(), i=list.findIndex(s=>s.id===id); if(i>=0) list[i]=st; else list.push(st); LEASE.stands=list;
   $$("standModal").hidden=true; saveLease();
-  const {ll,...rest}=st; enqueue(Object.assign({action:"saveStand",lat:ll[0],lon:ll[1]},rest,{facing:st.facing==null?"":st.facing})); toast(`Saved ${id} ${st.name}`);
+  const {ll,route,...rest}=st; enqueue(Object.assign({action:"saveStand",lat:ll[0],lon:ll[1]},rest,{facing:st.facing==null?"":st.facing})); toast(`Saved ${id} ${st.name}`);
 };
+$$("stRouteDel").onclick=()=>{const s=STE.orig; if(!s) return; s.route=null; $$("standModal").hidden=true; saveLease(); enqueue({action:"setRoute",id:s.id,route:""}); toast(`Removed the walk-in route for ${s.id}`)};
 $$("stDelete").onclick=()=>{
   const b=$$("stDelete"); if(!b.dataset.sure){b.dataset.sure=1;b.textContent="Tap again to delete";return}
   const id=STE.orig.id; LEASE.stands=(LEASE.stands||[]).filter(s=>s.id!==id); $$("standModal").hidden=true; delete standMarkers[id];
@@ -1893,7 +2018,7 @@ $$("stDelete").onclick=()=>{
 };
 
 /* ---------- boot ---------- */
-function renderAll(){renderChips();renderPlan();drawCones();renderPins();renderLayers();renderHunters();renderClubData();renderLight();renderAdmin()}
+function renderAll(){renderTracks();renderRec();renderChips();renderPlan();drawCones();renderPins();renderLayers();renderHunters();renderClubData();renderLight();renderAdmin()}
 buildLease(true);
 renderAll();
 loadWeather();
