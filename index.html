@@ -367,7 +367,7 @@ input[type=range]{padding:0;accent-color:var(--accent)}
 
 <div class="modal" id="addModal" hidden>
   <form class="card" id="addForm">
-    <h2>New pin</h2>
+    <h2 id="addTitle">New pin</h2>
     <div class="row" id="whereRow">
       <button type="button" class="btn" id="whereGps" aria-pressed="true">At my location</button>
       <button type="button" class="btn" id="whereMap" aria-pressed="false">At map crosshair</button>
@@ -1055,6 +1055,7 @@ function renderPins(){
         const b=document.createElement("button");b.className="btn";b.style.marginTop="8px";b.style.marginRight="6px";b.textContent="Add photos";b.onclick=()=>{map.closePopup();openCamAdd(p)};d.appendChild(b)}
       if(ME&&["stand","dblind","duck","turkey"].includes(p.type)){const h=document.createElement("button");h.className="btn primary";h.style.marginTop="8px";h.style.marginRight="6px";h.textContent="I'm hunting here";h.onclick=()=>{checkIn({stand:"pin:"+p.id,label:(p.note||t.name).slice(0,40),ll:[+p.lat,+p.lon]});map.closePopup()};d.appendChild(h)}
       if(ME&&(ME.admin||p.by===ME.name)){
+        const ed=document.createElement("button"); ed.className="btn"; ed.style.marginTop="8px"; ed.style.marginRight="6px"; ed.textContent="Edit pin"; ed.onclick=()=>{map.closePopup();openAdd(p)}; d.appendChild(ed);
         const b=document.createElement("button"); b.className="btn danger"; b.style.marginTop="8px"; b.textContent="Delete pin";
         b.onclick=()=>{ if(b.dataset.sure){deletePin(p.id);map.closePopup()} else {b.dataset.sure=1;b.textContent="Tap again to delete"} };
         d.appendChild(b);
@@ -1233,14 +1234,17 @@ function renderHunters(){
 document.getElementById("outChip").onclick=()=>{selectTab("out");collapse(false)};
 
 /* ---------- add pin modal ---------- */
-let addWhere="gps", addType="scrape", pinLL=null;  // pinLL: the spot picked with the crosshair
+let addWhere="gps", addType="scrape", pinLL=null, editPin=null;  // pinLL: the spot picked with the crosshair; editPin: the pin being edited
 const modal=document.getElementById("addModal");
-function openAdd(){
+function openAdd(edit){
   if(!ME){openSignIn();return}
-  addWhere=me?"gps":"map"; pinLL=null; renderWhere();
+  editPin=edit&&edit.id?edit:null;
+  $$("addTitle").textContent=editPin?"Edit pin":"New pin"; $$("pinSave").textContent=editPin?"Save changes":"Save pin";
+  if(editPin){addType=editPin.type; addWhere="map"; pinLL=[+editPin.lat,+editPin.lon]} else {addWhere=me?"gps":"map"; pinLL=null}
+  renderWhere();
   const tb=document.getElementById("typeBtns"); tb.innerHTML="";
   PIN_TYPES.forEach(t=>{const b=document.createElement("button");b.type="button";b.setAttribute("aria-pressed",t.k===addType);b.innerHTML=`<i style="background:${t.c}"></i>${t.name}`;b.onclick=()=>{addType=t.k;[...tb.children].forEach(c=>c.setAttribute("aria-pressed",c===b))};tb.appendChild(b)});
-  document.getElementById("pinNote").value=""; modal.hidden=false;
+  document.getElementById("pinNote").value=editPin?(editPin.note||""):""; modal.hidden=false;
 }
 function renderWhere(){
   document.getElementById("whereGps").setAttribute("aria-pressed",addWhere==="gps");
@@ -1248,7 +1252,7 @@ function renderWhere(){
   document.getElementById("whereGps").classList.toggle("primary",addWhere==="gps");
   document.getElementById("whereMap").classList.toggle("primary",addWhere==="map");
   document.getElementById("whereTxt").textContent=addWhere==="gps"?(me?`${me[0].toFixed(6)}, ${me[1].toFixed(6)}`:"No GPS fix yet. Tap the location button, or use the crosshair."):
-    pinLL?`Pin goes at ${pinLL[0].toFixed(6)}, ${pinLL[1].toFixed(6)}. Tap "At map crosshair" again to move it.`:"Tap \"At map crosshair\", then move the map to the spot.";
+    pinLL?`${editPin&&+editPin.lat===pinLL[0]&&+editPin.lon===pinLL[1]?"Stays where it is":"Pin goes at"} ${pinLL[0].toFixed(6)}, ${pinLL[1].toFixed(6)}. Tap "At map crosshair" to move it.`:"Tap \"At map crosshair\", then move the map to the spot.";
 }
 const pinBar=document.getElementById("pinPickBar"), crossEl=document.getElementById("cross");
 function startPinPick(){
@@ -1263,11 +1267,19 @@ document.getElementById("pinPickUse").onclick=()=>{ const c=crossLL(); pinLL=[c.
 document.getElementById("pinPickCancel").onclick=()=>{ if(!pinLL&&me) addWhere="gps"; endPinPick() };
 document.getElementById("whereGps").onclick=()=>{if(!me){startGps();toast("Getting your location…")}addWhere="gps";renderWhere()};
 document.getElementById("whereMap").onclick=startPinPick;
-document.getElementById("pinCancel").onclick=()=>{modal.hidden=true;pinBar.hidden=true;crossEl.classList.remove("show")};
+document.getElementById("pinCancel").onclick=()=>{modal.hidden=true;pinBar.hidden=true;crossEl.classList.remove("show");editPin=null};
 document.getElementById("addForm").onsubmit=e=>{
   e.preventDefault();
   let ll; if(addWhere==="gps"){ if(!me){toast("No GPS fix yet");return} ll=me } else { if(!pinLL){startPinPick();return} ll=pinLL }
-  addPin({id:Date.now().toString(36)+Math.random().toString(36).slice(2,7),t:new Date().toISOString(),lat:+ll[0].toFixed(6),lon:+ll[1].toFixed(6),type:addType,note:document.getElementById("pinNote").value.trim().slice(0,300),by:ME.name});
+  const note=document.getElementById("pinNote").value.trim().slice(0,300);
+  if(editPin){
+    const p=editPin, ch={type:addType,note,lat:+(+ll[0]).toFixed(6),lon:+(+ll[1]).toFixed(6)}; Object.assign(p,ch);
+    const q=p._pending&&QUEUE.find(x=>x.action==="add"&&x.id===p.id);
+    if(q) Object.assign(q,ch); else QUEUE.push(Object.assign({action:"editPin",id:p.id},ch));
+    S.set("pins",PINS); S.set("queue",QUEUE); editPin=null;
+    modal.hidden=true; pinBar.hidden=true; crossEl.classList.remove("show"); pinLL=null; renderPins(); sync(); toast("Pin updated"); return;
+  }
+  addPin({id:Date.now().toString(36)+Math.random().toString(36).slice(2,7),t:new Date().toISOString(),lat:+ll[0].toFixed(6),lon:+ll[1].toFixed(6),type:addType,note,by:ME.name});
   modal.hidden=true; pinBar.hidden=true; crossEl.classList.remove("show"); pinLL=null; toast(TYPE[addType].name+" pinned");
 };
 document.getElementById("btnAdd").onclick=()=>{ if(!pinBar.hidden){document.getElementById("pinPickUse").click();return} openAdd() };
