@@ -656,6 +656,7 @@ const PIN_TYPES = [
   {k:"note",   name:"Note",       c:"#7d8c6e", g:"N"}
 ];
 const TYPE = Object.fromEntries(PIN_TYPES.map(t=>[t.k,t]));
+const ANYONE_DELETES=["plot","feeder"];   // shared club pins: any member can delete them (backend checks this too)
 
 /* ---------- storage helpers ---------- */
 const S = {
@@ -1106,6 +1107,8 @@ function renderPins(){
       if(ME&&["stand","dblind","duck","turkey"].includes(p.type)){const h=document.createElement("button");h.className="btn primary";h.style.marginTop="8px";h.style.marginRight="6px";h.textContent="I'm hunting here";h.onclick=()=>{checkIn({stand:"pin:"+p.id,label:(p.note||t.name).slice(0,40),ll:[+p.lat,+p.lon]});map.closePopup()};d.appendChild(h)}
       if(ME&&(ME.admin||p.by===ME.name)){
         const ed=document.createElement("button"); ed.className="btn"; ed.style.marginTop="8px"; ed.style.marginRight="6px"; ed.textContent="Edit pin"; ed.onclick=()=>{map.closePopup();openAdd(p)}; d.appendChild(ed);
+      }
+      if(ME&&(ME.admin||p.by===ME.name||ANYONE_DELETES.includes(p.type))){
         const b=document.createElement("button"); b.className="btn danger"; b.style.marginTop="8px"; b.textContent="Delete pin";
         b.onclick=()=>{ if(b.dataset.sure){deletePin(p.id);map.closePopup()} else {b.dataset.sure=1;b.textContent="Tap again to delete"} };
         d.appendChild(b);
