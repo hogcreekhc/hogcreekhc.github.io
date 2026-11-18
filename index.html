@@ -8,6 +8,9 @@
 <meta name="apple-mobile-web-app-title" content="Hog Creek">
 <meta name="theme-color" content="#141a12">
 <title>Hog Creek Lease</title>
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Saira+Condensed:wght@600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
 <style>
@@ -59,6 +62,12 @@ button{font:inherit;color:inherit}
 .fab.add{background:var(--accent);border-color:var(--accent);color:#1a0d05}
 .fab.on{background:#1d4f86;border-color:#4aa3ff}
 .fab svg{width:24px;height:24px}
+/* club logo: one-color tracing, drawn in the theme text color so it reads on any background */
+.clublogo{display:block;margin:0 auto;aspect-ratio:2551/2225;background:var(--fg);-webkit-mask:url(icons/logo.svg) center/contain no-repeat;mask:url(icons/logo.svg) center/contain no-repeat}
+#hdgIc{transform:rotate(var(--mrot,0deg));transition:transform .25s linear}
+#windArr{transform:rotate(var(--mrot,0deg))}
+.fab .hdgtxt{position:absolute;font:700 9px var(--mono);bottom:3px;letter-spacing:.04em;color:var(--muted)}.fab{position:relative}
+.fab.on .hdgtxt{color:#cfe6ff}
 .cross{position:fixed;z-index:999;left:50%;top:calc(50% - var(--sheet-h)/2);width:34px;height:34px;margin:-17px 0 0 -17px;pointer-events:none;display:none}
 .cross.show{display:block}
 
@@ -234,6 +243,7 @@ input[type=range]{padding:0;accent-color:var(--accent)}
 <svg class="cross" id="cross" viewBox="0 0 34 34"><circle cx="17" cy="17" r="9" fill="none" stroke="#fff" stroke-width="2.5"/><circle cx="17" cy="17" r="9" fill="none" stroke="#000" stroke-width="1" stroke-opacity=".6"/><path d="M17 0v10M17 24v10M0 17h10M24 17h10" stroke="#fff" stroke-width="2.5"/></svg>
 
 <div class="fabs">
+  <button class="fab" id="btnHdg" aria-label="North up. Tap for heading up"><svg id="hdgIc" viewBox="0 0 24 24"><path d="M12 2l4.5 10h-9z" fill="#ef4a3a"/><path d="M12 22l-4.5-10h9z" fill="#e8ecef"/><circle cx="12" cy="12" r="1.6" fill="#141a12"/></svg><span class="hdgtxt" id="hdgTxt">N</span></button>
   <button class="fab" id="btnLocate" aria-label="Show my location"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="4"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/></svg></button>
   <button class="fab add" id="btnAdd" aria-label="Add a pin"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6"><path d="M12 5v14M5 12h14"/></svg></button>
 </div>
@@ -319,6 +329,7 @@ input[type=range]{padding:0;accent-color:var(--accent)}
     </section>
 
     <section class="pane" id="p-settings">
+      <div class="clublogo" role="img" aria-label="Hog Creek Hunting Club" style="width:min(180px,50vw);margin-top:6px"></div>
       <div class="fact"><span class="k">Signed in as</span><span class="v" id="whoami">Not signed in</span></div>
       <div class="row"><button class="btn" id="btnSignOut">Sign out of this phone</button></div>
       <label class="f">Club sheet link<input id="setUrl" placeholder="Apps Script /exec link (only if not built in)"></label>
@@ -348,6 +359,7 @@ input[type=range]{padding:0;accent-color:var(--accent)}
 
 <div class="modal" id="signModal" hidden>
   <form class="card" id="signForm">
+    <div class="clublogo" role="img" aria-label="Hog Creek Hunting Club" style="width:min(220px,60vw)"></div>
     <h2>Sign in</h2>
     <p class="note" style="margin:0">Enter the personal code the club gave you. You only do this once on each phone.</p>
     <label class="f">Your code<input id="signCode" autocomplete="one-time-code" autocapitalize="off" spellcheck="false" required></label>
@@ -374,6 +386,8 @@ input[type=range]{padding:0;accent-color:var(--accent)}
     </div>
     <div class="status" id="whereTxt"></div>
     <div class="types" id="typeBtns"></div>
+    <div class="row" id="plotFields" hidden style="flex-wrap:nowrap"><label class="f" style="flex:0 0 112px">Size (acres)<input id="pinAcres" type="number" step="0.05" min="0" inputmode="decimal" placeholder="0.5"></label><label class="f" style="flex:1">Planting<input id="pinPlant" maxlength="200" placeholder="Clover + oats/wheat"></label></div>
+    <p class="note" id="feederWarn" hidden style="margin:0;color:var(--ok)">Feeders need Weyerhaeuser's written OK. No turkey hunting near bait.</p>
     <label class="f">Note<textarea id="pinNote" rows="2" placeholder="Fresh scrape, licking branch, 8 pt on cam…"></textarea></label>
     <div class="row"><button class="btn primary" type="submit" id="pinSave">Save pin</button><button class="btn" type="button" id="pinCancel">Cancel</button></div>
   </form>
@@ -588,8 +602,8 @@ input[type=range]{padding:0;accent-color:var(--accent)}
       <label class="f" style="flex:0 0 92px">Map label<input id="stId" maxlength="12" required autocapitalize="characters" spellcheck="false"></label>
       <label class="f" style="flex:1">Name<input id="stName" maxlength="60" required placeholder="Creek bottom ladder"></label>
     </div>
-    <label class="f">Type<input id="stType" list="stTypes" maxlength="40" placeholder="Ladder, box blind…"></label>
-    <datalist id="stTypes"><option>Ladder</option><option>Double ladder</option><option>Box blind</option><option>Box stand</option><option>Ground blind</option><option>Hang-on</option><option>Climber spot</option></datalist>
+    <label class="f">Type<select id="stType"><option>Double ladder</option><option>Box</option><option>Ground blind</option><option>Climber</option><option>Single</option></select></label>
+    <label class="f">Note<input id="stNote" maxlength="200" placeholder="Old wooden stand · fits 2 · scout before hanging"></label>
     <label class="f" id="stPropWrap">Property<select id="stProp"></select></label>
     <div class="sec">Location</div>
     <div class="status" id="stWhere"></div>
@@ -606,7 +620,7 @@ input[type=range]{padding:0;accent-color:var(--accent)}
     <label class="f">Evenings: <b id="stPmV"></b><input type="range" min="0" max="10" id="stPm"></label>
     <label class="f">Midday: <b id="stMidV"></b><input type="range" min="0" max="10" id="stMid"></label>
     <label class="f">Midday during the rut: <b id="stRutV"></b><input type="range" min="0" max="10" id="stRut"></label>
-    <label class="sharebox"><input type="checkbox" id="stKids"><span><b>Kid friendly</b></span></label>
+    <label class="sharebox"><input type="checkbox" id="stKids"><span><b>Kids OK</b><br><span class="note">Safe and roomy enough to bring a kid</span></span></label>
     <label class="f">Why it's good<textarea id="stWhy" rows="2" maxlength="300" placeholder="Over the scrape line, 40 yd off the creek"></textarea></label>
     <label class="f">How to walk in<textarea id="stWalk" rows="2" maxlength="300" placeholder="End of main road, then 150 m west"></textarea></label>
     <div class="status" id="stMsg"></div>
@@ -619,6 +633,7 @@ input[type=range]{padding:0;accent-color:var(--accent)}
 <div class="toast" id="toast"></div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/leaflet-rotate@0.2.8/dist/leaflet-rotate-src.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/suncalc/1.9.0/suncalc.min.js"></script>
 <script>
 let LEASE = null;
@@ -634,6 +649,8 @@ const PIN_TYPES = [
   {k:"duck",   name:"Duck spot",  c:"#2f8fd0", g:"Dk"},
   {k:"dblind", name:"Duck blind", c:"#1d5f99", g:"DB"},
   {k:"cam",    name:"Trail cam",  c:"#6b6b6b", g:"Cm"},
+  {k:"feeder", name:"Feeder",     c:"#9a7417", g:'<span style="font-size:14px;line-height:1">🌽</span>'},
+  {k:"plot",   name:"Food plot",  c:"#3d8b2f", g:'<span style="font-size:14px;line-height:1">🌱</span>'},
   {k:"harvest",name:"Harvest",    c:"#e2a51b", g:"H"},
   {k:"blood",  name:"Blood",      c:"#9e1b1b", g:"Bl"},
   {k:"note",   name:"Note",       c:"#7d8c6e", g:"N"}
@@ -656,7 +673,7 @@ function toast(msg){const t=document.getElementById("toast");t.textContent=msg;t
 const esc=s=>String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
 
 /* ---------- map ---------- */
-const map=L.map("map",{zoomControl:false,attributionControl:true,maxZoom:20,zoomSnap:.25}).setView([CLUB.LAT,CLUB.LON],LEASE?16:12);
+const map=L.map("map",{zoomControl:false,attributionControl:true,maxZoom:20,zoomSnap:.25,rotate:true,bearing:0,rotateControl:false,touchRotate:false,shiftKeyRotate:false,compassBearing:false}).setView([CLUB.LAT,CLUB.LON],LEASE?16:12);
 const WMSTiles=L.TileLayer.extend({getTileUrl(c){const W=40075016.68557849,n=2**c.z,x0=-W/2+c.x*W/n,y1=W/2-c.y*W/n;return `${this._url}&BBOX=${x0},${y1-W/n},${x0+W/n},${y1}`}});
 const WMS=l=>`https://elevation.nationalmap.gov/arcgis/services/3DEPElevation/ImageServer/WMSServer?SERVICE=WMS&REQUEST=GetMap&VERSION=1.1.1&SRS=EPSG:3857&WIDTH=256&HEIGHT=256&STYLES=&FORMAT=image/png&TRANSPARENT=true&LAYERS=${encodeURIComponent(l)}`;
 const ExportTiles=L.TileLayer.extend({getTileUrl(c){const W=40075016.68557849,n=2**c.z,x0=-W/2+c.x*W/n,y1=W/2-c.y*W/n;return `${this._url}&bbox=${x0},${y1-W/n},${x0+W/n},${y1}`}});
@@ -724,7 +741,7 @@ function buildLease(fit){
     m.bindPopup(()=>standPopup(s)); m.addTo(standLayer); standMarkers[s.id]=m;
     if(Array.isArray(s.route)&&s.route.length>1){L.polyline(s.route,{color:"#000",weight:6,opacity:.35,interactive:false}).addTo(routeLayer);
       L.polyline(s.route,{color:"#7df9ff",weight:3,dashArray:"2 7",lineCap:"round"}).bindPopup(`<h4>Walk-in route to ${esc(s.id)}</h4><div class="pop-m">${yd(lineLen(s.route))} yd</div>`).addTo(routeLayer)}
-    if(s.facing!=null&&isFinite(s.facing)) L.marker(s.ll,{icon:L.divIcon({className:"lbl",html:`<div class="face-ic" style="transform:rotate(${+s.facing}deg)"><svg viewBox="0 0 70 70"><path d="M35 1 L44 15 L26 15 Z" fill="#fff" stroke="#111" stroke-width="1.5" stroke-linejoin="round"/></svg></div>`,iconSize:[70,70],iconAnchor:[35,35]}),interactive:false,zIndexOffset:490}).addTo(standLayer);
+    if(s.facing!=null&&isFinite(s.facing)) L.marker(s.ll,{icon:L.divIcon({className:"lbl",html:`<div class="face-ic" style="transform:rotate(calc(${+s.facing}deg + var(--mrot,0deg)))"><svg viewBox="0 0 70 70"><path d="M35 1 L44 15 L26 15 Z" fill="#fff" stroke="#111" stroke-width="1.5" stroke-linejoin="round"/></svg></div>`,iconSize:[70,70],iconAnchor:[35,35]}),interactive:false,zIndexOffset:490}).addTo(standLayer);
   });
   (LEASE.oldPins||[]).forEach(p=>{
     L.marker(p.ll,{icon:L.divIcon({className:"lbl",html:`<div class="old-ic">${esc(p.n)}</div>`,iconSize:[20,20],iconAnchor:[10,10]})})
@@ -954,12 +971,13 @@ function drawCones(){
   // pins have no "good winds" saved, so their cones are white
   if(map.hasLayer(pinLayer)&&pinFilter.has("stand")) PINS.filter(p=>!p.deleted&&p.type==="stand"&&standShown("pin:"+p.id)).forEach(p=>cone([+p.lat,+p.lon],"#ffffff"));
 }
+const sLbl=id=>/^\d+$/.test(String(id))?"#"+id:String(id);
 function standPopup(s){
-  let html=`<h4>${esc(s.id)} · ${esc(s.name)}</h4><div>${esc(s.type)}${s.kids?" · kid friendly":""}${s.facing!=null&&isFinite(s.facing)?` · faces ${card(+s.facing)}`:""}</div><div style="margin-top:4px">${esc(s.why)}</div><div class="pop-m" style="margin-top:4px">Walk in: ${esc(s.walk)}</div>${Array.isArray(s.route)&&s.route.length>1?`<div class="pop-m" style="color:#7df9ff">Walk-in route: ${yd(lineLen(s.route))} yd. Guide me follows it.</div>`:""}`;
+  let html=`<h4>${esc(sLbl(s.id))} · ${esc(s.name)}</h4><div><b>${esc(s.type||"Stand")}</b> · ${s.kids?'<span class="g">Kids OK</span>':'<span class="pop-m">Not for kids</span>'}${s.facing!=null&&isFinite(s.facing)?` · faces ${card(+s.facing)}`:""}</div>${s.note?`<div style="margin-top:3px;color:var(--ok)">${esc(s.note)}</div>`:""}${s.why?`<div style="margin-top:4px">${esc(s.why)}</div>`:""}${s.walk?`<div class="pop-m" style="margin-top:4px">Walk in: ${esc(s.walk)}</div>`:""}${Array.isArray(s.route)&&s.route.length>1?`<div class="pop-m" style="color:#7df9ff">Walk-in route: ${yd(lineLen(s.route))} yd. Guide me follows it.</div>`:""}`;
   if(WX){const i=wxIndex(new Date()); if(i>=0){const w=windFit(s,WX.hourly.wind_direction_10m[i]); html+=`<div class="pop-m">Wind now ${card(WX.hourly.wind_direction_10m[i])}: <span class="${w.f>=1?'g':w.f>=.5?'o':'b'}">${w.txt}</span></div>`}}
   if(me) html+=`<div class="pop-m">${yd(dist(me,s.ll))} yd from you, heading ${card(bearing(me,s.ll))}</div>`;
   html+=`<div class="pop-m">${s.ll[0]}, ${s.ll[1]}</div>`;
-  const d=withHuntButton(html,{stand:s.id,label:`${s.id} ${s.name}`,ll:s.ll});
+  const d=withHuntButton(html,{stand:s.id,label:`${sLbl(s.id)} ${s.name}`,ll:s.ll});
   if(ME?.admin){const e=document.createElement("button");e.className="btn";e.textContent="Edit stand";e.onclick=()=>{map.closePopup();openStandEditor(s)};d.querySelector(".mini").appendChild(e)}
   return d;
 }
@@ -1018,7 +1036,8 @@ function onPos(p){
 let lastHeading=null, compassLive=false;
 function setHeading(h){
   lastHeading=h; if(typeof updateNav==="function"&&navTarget) updateNav(); const w=document.getElementById("mewrap"), c=document.getElementById("mecone");
-  if(!w||!c) return; w.classList.add("hd"); c.style.transform=`rotate(${h}deg)`;
+  if(!w||!c) return; w.classList.add("hd"); c.style.transform=`rotate(calc(${h}deg + var(--mrot,0deg)))`;
+  if(hdgUp) queueBearing();
 }
 function onOrient(e){
   let h=null;
@@ -1026,7 +1045,23 @@ function onOrient(e){
   else if(e.absolute&&typeof e.alpha==="number") h=(360-e.alpha)%360;               // Android
   if(h==null) return;
   const so=(screen.orientation&&screen.orientation.angle)||window.orientation||0;
-  compassLive=true; setHeading((h+so+360)%360);
+  compassLive=true; h=smoothHeading((h+so+360)%360);
+  if(lastHeading!=null&&angDiff(h,lastHeading)<3) return;   // ignore jitter under 3°
+  setHeading(h);
+}
+// low-pass filter on the compass (works across the 359°→0° wrap)
+let smHd=null;
+function smoothHeading(h){ if(smHd==null) return smHd=h; const d=((h-smHd+540)%360)-180; if(Math.abs(d)>90) return smHd=h; smHd=(smHd+.25*d+360)%360; return smHd }
+/* ---------- heading-up map (leaflet-rotate) ---------- */
+let hdgUp=!!S.get("hdgUp",false), brgQueued=false, rotPaused=false;
+function setMapRot(t){ t=((t%360)+360)%360; if(map.setBearing) map.setBearing(t); document.documentElement.style.setProperty("--mrot",t+"deg") }
+function queueBearing(){ if(brgQueued) return; brgQueued=true; requestAnimationFrame(()=>{brgQueued=false; if(hdgUp&&!rotPaused&&lastHeading!=null) setMapRot(-lastHeading)}) }
+function renderHdg(){ const b=document.getElementById("btnHdg"); b.classList.toggle("on",hdgUp); document.getElementById("hdgTxt").textContent=hdgUp?"HDG":"N"; b.setAttribute("aria-label",hdgUp?"Heading up. Tap for north up":"North up. Tap for heading up") }
+function setHdgUp(on){
+  hdgUp=on; S.set("hdgUp",on); renderHdg();
+  if(on){ startCompass(); if(watchId==null) startGps(); else if(me){follow=true;updateLocateBtn();map.panTo(me)}
+    if(lastHeading!=null&&!rotPaused) setMapRot(-lastHeading); toast(lastHeading==null?"Heading up. Waiting for the compass…":"Heading up") }
+  else { setMapRot(0); toast("North up") }
 }
 async function startCompass(){
   if(window._compassOn) return;
@@ -1041,6 +1076,9 @@ async function startCompass(){
   }catch(e){}
 }
 document.getElementById("btnLocate").onclick=()=>{startCompass();startGps()};
+document.getElementById("btnHdg").onclick=()=>setHdgUp(!hdgUp);
+if(hdgUp){ renderHdg(); // iPhone only allows the compass after a tap, so start it on the first one
+  if(typeof DeviceOrientationEvent!=="undefined"&&typeof DeviceOrientationEvent.requestPermission==="function") document.addEventListener("click",()=>startCompass(),{once:true,capture:true}); else startCompass() }
 document.getElementById("gpsChip").onclick=()=>{startCompass();startGps()};
 map.on("dragstart",()=>{if(follow){follow=false;updateLocateBtn()}});
 
@@ -1051,6 +1089,7 @@ const pinFilter=new Set(S.get("pinFilter",PIN_TYPES.map(t=>t.k)));
 // pin types added later start shown, even on phones that saved a filter before they existed
 {const known=S.get("pinKnown",["stand","scrape","rub","turkey","duck","dblind","cam","harvest","blood","note"]);
  PIN_TYPES.forEach(t=>{if(!known.includes(t.k))pinFilter.add(t.k)}); S.set("pinKnown",PIN_TYPES.map(t=>t.k)); S.set("pinFilter",[...pinFilter])}
+const fmtAc=a=>a===.5?"½":a===.25?"¼":a===.75?"¾":String(a);
 function pinIcon(t){return L.divIcon({className:"lbl",html:`<div class="picon" style="background:${t.c}">${t.g}</div>`,iconSize:[26,26],iconAnchor:[13,13]})}
 function renderPins(){
   pinLayer.clearLayers(); if(typeof drawCones==="function") drawCones(); renderStandList();
@@ -1059,7 +1098,7 @@ function renderPins(){
     const t=TYPE[p.type]||TYPE.note;
     L.marker([+p.lat,+p.lon],{icon:pinIcon(t)}).bindPopup(()=>{
       const d=document.createElement("div");
-      d.innerHTML=`<h4>${esc(t.name)}</h4>${p.note?`<div>${esc(p.note)}</div>`:""}<div class="pop-m">${esc(p.by||"Someone")} · ${new Date(p.t).toLocaleString("en-US",{timeZone:CLUB.TZ,month:"short",day:"numeric",hour:"numeric",minute:"2-digit"})}${p._pending?" · waiting to upload":""}</div><div class="pop-m">${(+p.lat).toFixed(6)}, ${(+p.lon).toFixed(6)}</div>`;
+      d.innerHTML=`<h4>${esc(t.name)}</h4>${p.note?`<div>${esc(p.note)}</div>`:""}${p.type==="plot"&&(p.acres!==""&&p.acres!=null||p.plant)?`<div style="margin-top:3px">${p.acres!==""&&p.acres!=null?`<b>${esc(fmtAc(+p.acres))} ac</b>`:""}${p.plant?`${p.acres!==""&&p.acres!=null?" · ":""}Plant: ${esc(p.plant)}`:""}</div>`:""}${p.type==="feeder"&&!/Weyerhaeuser/i.test(p.note||"")?`<div style="margin-top:3px;color:var(--ok)">Needs Weyerhaeuser written OK. No turkey hunting near bait.</div>`:""}<div class="pop-m">${esc(p.by||"Someone")} · ${new Date(p.t).toLocaleString("en-US",{timeZone:CLUB.TZ,month:"short",day:"numeric",hour:"numeric",minute:"2-digit"})}${p._pending?" · waiting to upload":""}</div><div class="pop-m">${(+p.lat).toFixed(6)}, ${(+p.lon).toFixed(6)}</div>`;
       {const g=document.createElement("button");g.className="btn";g.style.marginTop="8px";g.style.marginRight="6px";g.textContent="Guide me";g.onclick=()=>{map.closePopup();guideTo((p.note||t.name).slice(0,40),[+p.lat,+p.lon])};d.appendChild(g)}
       if(p.type==="cam"&&ME){const n=CAMS.filter(c=>c.pinId===p.id).length;
         const a=document.createElement("button");a.className="btn primary";a.style.marginTop="8px";a.style.marginRight="6px";a.textContent=`Photos (${n})`;a.onclick=()=>{map.closePopup();openCamGallery(p)};d.appendChild(a);
@@ -1166,7 +1205,7 @@ function deletePin(id){
   QUEUE=QUEUE.filter(q=>!(q.action==="add"&&q.id===id)); if(!p?._pending) QUEUE.push({action:"delete",id}); S.set("queue",QUEUE);
   renderPins(); sync(); toast("Pin deleted");
 }
-const strip=p=>({id:p.id,t:p.t,lat:p.lat,lon:p.lon,type:p.type,note:p.note});
+const strip=p=>({id:p.id,t:p.t,lat:p.lat,lon:p.lon,type:p.type,note:p.note,acres:p.acres??"",plant:p.plant||""});
 
 /* ---------- who's out / check-ins ---------- */
 function checkIn(spot){
@@ -1254,9 +1293,11 @@ function openAdd(edit){
   if(editPin){addType=editPin.type; addWhere="map"; pinLL=[+editPin.lat,+editPin.lon]} else {addWhere=me?"gps":"map"; pinLL=null}
   renderWhere();
   const tb=document.getElementById("typeBtns"); tb.innerHTML="";
-  PIN_TYPES.forEach(t=>{const b=document.createElement("button");b.type="button";b.setAttribute("aria-pressed",t.k===addType);b.innerHTML=`<i style="background:${t.c}"></i>${t.name}`;b.onclick=()=>{addType=t.k;[...tb.children].forEach(c=>c.setAttribute("aria-pressed",c===b))};tb.appendChild(b)});
-  document.getElementById("pinNote").value=editPin?(editPin.note||""):""; modal.hidden=false;
+  PIN_TYPES.forEach(t=>{const b=document.createElement("button");b.type="button";b.setAttribute("aria-pressed",t.k===addType);b.innerHTML=`<i style="background:${t.c}"></i>${t.name}`;b.onclick=()=>{addType=t.k;[...tb.children].forEach(c=>c.setAttribute("aria-pressed",c===b));pinExtras()};tb.appendChild(b)});
+  document.getElementById("pinNote").value=editPin?(editPin.note||""):""; $$("pinAcres").value=editPin&&editPin.acres!==""&&editPin.acres!=null?editPin.acres:""; $$("pinPlant").value=editPin?.plant||""; pinExtras(); modal.hidden=false;
 }
+function pinExtras(){ $$("plotFields").hidden=addType!=="plot"; $$("feederWarn").hidden=addType!=="feeder" }
+const pinAcres=()=>{const v=$$("pinAcres").value.trim();return v===""||!isFinite(+v)||+v<0?"":Math.round(+v*100)/100};
 function renderWhere(){
   document.getElementById("whereGps").setAttribute("aria-pressed",addWhere==="gps");
   document.getElementById("whereMap").setAttribute("aria-pressed",addWhere==="map");
@@ -1284,13 +1325,13 @@ document.getElementById("addForm").onsubmit=e=>{
   let ll; if(addWhere==="gps"){ if(!me){toast("No GPS fix yet");return} ll=me } else { if(!pinLL){startPinPick();return} ll=pinLL }
   const note=document.getElementById("pinNote").value.trim().slice(0,300);
   if(editPin){
-    const p=editPin, ch={type:addType,note,lat:+(+ll[0]).toFixed(6),lon:+(+ll[1]).toFixed(6)}; Object.assign(p,ch);
+    const p=editPin, ch={type:addType,note,lat:+(+ll[0]).toFixed(6),lon:+(+ll[1]).toFixed(6)}; if(addType==="plot"||p.type==="plot"){ch.acres=addType==="plot"?pinAcres():"";ch.plant=addType==="plot"?$$("pinPlant").value.trim().slice(0,200):""} Object.assign(p,ch);
     const q=p._pending&&QUEUE.find(x=>x.action==="add"&&x.id===p.id);
     if(q) Object.assign(q,ch); else QUEUE.push(Object.assign({action:"editPin",id:p.id},ch));
     S.set("pins",PINS); S.set("queue",QUEUE); editPin=null;
     modal.hidden=true; pinBar.hidden=true; crossEl.classList.remove("show"); pinLL=null; renderPins(); sync(); toast("Pin updated"); return;
   }
-  addPin({id:Date.now().toString(36)+Math.random().toString(36).slice(2,7),t:new Date().toISOString(),lat:+ll[0].toFixed(6),lon:+ll[1].toFixed(6),type:addType,note,by:ME.name});
+  addPin({id:Date.now().toString(36)+Math.random().toString(36).slice(2,7),t:new Date().toISOString(),lat:+ll[0].toFixed(6),lon:+ll[1].toFixed(6),type:addType,note,by:ME.name,...(addType==="plot"?{acres:pinAcres(),plant:$$("pinPlant").value.trim().slice(0,200)}:{})});
   modal.hidden=true; pinBar.hidden=true; crossEl.classList.remove("show"); pinLL=null; toast(TYPE[addType].name+" pinned");
 };
 document.getElementById("btnAdd").onclick=()=>{ if(!pinBar.hidden){document.getElementById("pinPickUse").click();return} openAdd() };
@@ -1629,16 +1670,19 @@ $$("camAddForm").onsubmit=async e=>{
   openCamGallery(pin); sync();
 };
 function openCamGallery(p){ camPin=p; camFilter="All"; $$("camGalTitle").textContent=p.note?p.note.slice(0,40):"Trail cam"; renderCamGallery(); $$("camGalModal").hidden=false; }
+const camRetry=new Set();
 function renderCamGallery(){
   if(!camPin) return;
   const all=CAMS.filter(c=>c.pinId===camPin.id).sort((a,b)=>String(b.time).localeCompare(String(a.time)));
   const f=$$("camFilt"); f.innerHTML="";
   ["All",...CAM_TAGS].forEach(t=>{const n=t==="All"?all.length:all.filter(c=>c.tag===t).length; if(t!=="All"&&!n) return;
     const b=document.createElement("button");b.type="button";b.setAttribute("aria-pressed",camFilter===t);b.textContent=`${t} ${n}`;b.onclick=()=>{camFilter=t;renderCamGallery()};f.appendChild(b)});
+  // photos whose wind lookup failed: ask again (the upload step fills it in)
+  all.filter(c=>!c._pending&&(c.windDir===""||c.windDir==null)&&canEdit(c)&&!camRetry.has(c.id)&&!QUEUE.some(q=>q.id===c.id)).forEach(c=>{camRetry.add(c.id);enqueue({action:"updateCamPhoto",id:c.id,time:c.time,windDir:"",windSp:""})});
   const g=$$("camGrid"); g.innerHTML="";
   const shown=all.filter(c=>camFilter==="All"||c.tag===camFilter);
   if(!shown.length) g.innerHTML='<div class="note" style="grid-column:1/-1">No photos yet. Tap Add photos.</div>';
-  shown.forEach(c=>{const b=document.createElement("button");b.type="button";b.innerHTML=`<img alt="" loading="lazy"><span class="cap">${esc(c.tag)} · ${esc(camWhen(c.time))}${c._pending?" · waiting":""}</span>`;
+  shown.forEach(c=>{const b=document.createElement("button");b.type="button";b.innerHTML=`<img alt="" loading="lazy"><span class="cap">${esc(c.tag)} · ${esc(camWhen(c.time))}${c.windDir!==""&&c.windDir!=null?`<br>💨 ${card(+c.windDir)} ${esc(c.windSp)} mph`:""}${c._pending?" · waiting":""}</span>`;
     camSrc(c,b.querySelector("img"),"w400"); b.onclick=()=>openCamView(c); g.appendChild(b)});
 }
 $$("camGalAdd").onclick=()=>openCamAdd(camPin);
@@ -1717,7 +1761,7 @@ function renderTrails(){
       return d}).addTo(trailLayer);
     if(t.dir==="fwd"||t.dir==="back"||t.dir==="both"){
       const ar=trailArrows(t.pts,t.dir==="back"); if(t.dir==="both") trailArrows(t.pts,true).forEach((q,i)=>{if(i%2)ar.push(q)});
-      ar.forEach(q=>L.marker(q.ll,{icon:L.divIcon({className:"lbl",html:`<div class="tr-ar" style="transform:rotate(${q.br}deg)"><svg viewBox="0 0 18 18" width="18" height="18"><path d="M9 1 L16 15 L9 11 L2 15 Z" fill="${u.c}" stroke="#000" stroke-width="1.2" stroke-linejoin="round"/></svg></div>`,iconSize:[18,18],iconAnchor:[9,9]}),interactive:false}).addTo(trailLayer));
+      ar.forEach(q=>L.marker(q.ll,{icon:L.divIcon({className:"lbl",html:`<div class="tr-ar" style="transform:rotate(calc(${q.br}deg + var(--mrot,0deg)))"><svg viewBox="0 0 18 18" width="18" height="18"><path d="M9 1 L16 15 L9 11 L2 15 Z" fill="${u.c}" stroke="#000" stroke-width="1.2" stroke-linejoin="round"/></svg></div>`,iconSize:[18,18],iconAnchor:[9,9]}),interactive:false}).addTo(trailLayer));
     }
   });
 }
@@ -2208,6 +2252,8 @@ let ED=null;
 const edLayer=L.layerGroup().addTo(map);
 const vIcon=(cls)=>L.divIcon({className:"lbl",html:`<div class="${cls}"></div>`,iconSize:[16,16],iconAnchor:[8,8]});
 function startEdit(p){
+  rotPaused=true; setMapRot(0);   // vertex dragging only works north up
+
   if(!ME?.admin||ED) return;
   if(meas) $$("measDone").click();
   ED={id:p?.id||null,name:p?.name||"",color:p?.color||PROP_COLORS[props().length%PROP_COLORS.length],ring:p?p.boundary.map(x=>[+x[0],+x[1]]):[],start:p?JSON.stringify(p.boundary):"[]",
@@ -2282,7 +2328,7 @@ $$("edCancel").onclick=()=>{
   if(changed&&!b.dataset.sure){b.dataset.sure=1;toast("Tap Cancel again to throw away your changes");setTimeout(()=>b.dataset.sure="",3000);return}
   b.dataset.sure=""; stopEdit();
 };
-function stopEdit(){ ED=null; keepAwake(false); edLayer.clearLayers(); map.off("click",edClick); $$("editBar").hidden=true; buildLease(false); renderHunters(); renderRoads(); renderTrails() }
+function stopEdit(){ rotPaused=false; if(hdgUp&&lastHeading!=null) setMapRot(-lastHeading); ED=null; keepAwake(false); edLayer.clearLayers(); map.off("click",edClick); $$("editBar").hidden=true; buildLease(false); renderHunters(); renderRoads(); renderTrails() }
 
 /* ----- name / color, then save ----- */
 let PM=null;
@@ -2333,7 +2379,10 @@ function windsFromDirs(on){
     else res.push([Math.round(lo),Math.round(hi)])});
   return res;
 }
-function nextStandId(){let n=0;(LEASE?.stands||[]).forEach(s=>{const m=/^S(\d+)$/.exec(s.id);if(m)n=Math.max(n,+m[1])});return "S"+(n+1)}
+const STAND_TYPES=["Double ladder","Box","Ground blind","Climber","Single"];
+// older stands may have other type names; keep them as an extra choice
+function setStType(t){const sel=$$("stType");[...sel.options].forEach(o=>{if(!STAND_TYPES.includes(o.value))o.remove()});if(t&&!STAND_TYPES.includes(t)){const o=document.createElement("option");o.textContent=t;sel.appendChild(o)}sel.value=t}
+function nextStandId(){let n=0;(LEASE?.stands||[]).forEach(s=>{const m=/^(\d+)$/.exec(s.id);if(m)n=Math.max(n,+m[1])});return String(n+1)}
 function propFor(ll){return props().find(p=>inPoly(ll,p.boundary))?.id||props()[0]?.id||""}
 function openStandEditor(s,keep){
   if(!ME?.admin||!LEASE) return;
@@ -2342,7 +2391,7 @@ function openStandEditor(s,keep){
     STE={orig:s,ll:s?s.ll.slice():(me?[r6(me[0]),r6(me[1])]:[r6(c.lat),r6(c.lng)]),dirs:dirsFromWinds(s?.winds||[[0,360]]),windsDirty:!s,facing:s&&s.facing!=null&&isFinite(s.facing)?+s.facing:null,faceSet:false};
     $$("stTitle").textContent=s?`Edit ${s.id}`:"New stand";
     $$("stId").value=s?s.id:nextStandId(); $$("stId").readOnly=!!s;
-    $$("stName").value=s?.name||""; $$("stType").value=s?.type||"";
+    $$("stName").value=s?.name||""; setStType(s?.type||"Double ladder"); $$("stNote").value=s?.note||"";
     [["stAm","am",1],["stPm","pm",1],["stMid","mid",.4],["stRut","rutMid",.7]].forEach(([id,k,d])=>$$(id).value=Math.round(10*(s?(+s[k]||0):d)));
     $$("stKids").checked=s?!!s.kids:true; $$("stWhy").value=s?.why||""; $$("stWalk").value=s?.walk||"";
     $$("stDelete").hidden=!s; $$("stDelete").dataset.sure=""; $$("stDelete").textContent="Delete stand";
@@ -2391,7 +2440,7 @@ $$("standForm").onsubmit=e=>{
   if(!STE.orig&&(LEASE.stands||[]).some(s=>s.id===id)){$$("stMsg").textContent=`${id} is already used. Pick another label.`;return}
   const st={id,propertyId:$$("stProp").value||propFor(STE.ll),name:$$("stName").value.trim().slice(0,60)||id,type:$$("stType").value.trim().slice(0,40),ll:STE.ll.slice(),
     winds:STE.windsDirty||!STE.orig?windsFromDirs(STE.dirs):STE.orig.winds,am:+$$("stAm").value/10,pm:+$$("stPm").value/10,mid:+$$("stMid").value/10,rutMid:+$$("stRut").value/10,
-    kids:$$("stKids").checked,why:$$("stWhy").value.trim().slice(0,300),walk:$$("stWalk").value.trim().slice(0,300),facing:STE.facing};
+    kids:$$("stKids").checked,note:$$("stNote").value.trim().slice(0,200),why:$$("stWhy").value.trim().slice(0,300),walk:$$("stWalk").value.trim().slice(0,300),facing:STE.facing};
   if(STE.orig&&STE.orig.route) st.route=STE.orig.route;
   const list=(LEASE.stands||[]).slice(), i=list.findIndex(s=>s.id===id); if(i>=0) list[i]=st; else list.push(st); LEASE.stands=list;
   $$("standModal").hidden=true; saveLease();
