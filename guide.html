@@ -113,7 +113,7 @@ footer{padding-block:28px 48px;color:var(--muted);font-size:14px}
     <li><span>Type the personal code the club gave you and tap <span class="btn">Sign in</span>. Your code is yours alone; don't share it.</span></li>
     <li><span>iPhone: tap <b>Share</b>, then <b>Add to Home Screen</b>. Android: tap the ⋮ menu, then <b>Add to Home screen</b>. Open it from that icon from now on.</span></li>
     <li><span>When it asks, allow <b>location</b> and <b>motion &amp; orientation</b>. Location puts your blue dot on the map; motion lets the cone point the way you're facing.</span></li>
-    <li><span>Go to <b>Map</b> and tap <span class="btn">Save the lease map for no-signal use</span>. The lease has about one bar, so do this before your first trip.</span></li>
+    <li><span>Go to <b>Settings</b> (the last tab; swipe the tab row left to reach it). Under <b>Offline map</b>, tap <span class="btn">Save the lease map for no-signal use</span>. The lease has about one bar, so do this before your first trip. See <a href="#offline">No signal</a>.</span></li>
   </ol>
   <div class="tip"><b>Old icon?</b> If your home-screen icon opens the old address, delete it and add the app again from hogcreekhc.github.io.</div>
 </section>
@@ -273,10 +273,18 @@ footer{padding-block:28px 48px;color:var(--muted);font-size:14px}
   <p>Your saved tracks are listed under <b>Saved tracks</b> in Map. Delete one, or <span class="btn">Clear all tracks</span>.</p>
 </section>
 
-<section id="offline" data-k="offline no signal one bar sync upload save map wifi">
+<section id="offline" data-k="offline no signal one bar sync upload save map download wifi settings">
   <h2>No signal on the lease</h2>
+  <h3>Save the map before you go</h3>
+  <ol class="steps">
+    <li><span>At home on Wi-Fi, open the app and sign in.</span></li>
+    <li><span>Go to <b>Settings</b> (the last tab; swipe the tab row left to reach it).</span></li>
+    <li><span>Under <b>Offline map</b>, tap <span class="btn">Save the lease map for no-signal use</span>.</span></li>
+    <li><span>Keep the app open while it counts up the map pieces. It takes a few minutes. When it says <b>Lease map saved</b>, you're done.</span></li>
+  </ol>
+  <p>It saves the whole lease and a margin around it, zoomed all the way in: both aerials, LiDAR terrain, Topo, the 10 ft contours and the elevation shading. After that the button reads <span class="btn">Update saved map</span>. Tap it again if the map looks blurry or the app says there are new maps, and if it says only some pieces saved, run it again on better signal.</p>
+  <h3>On the lease</h3>
   <ul>
-    <li>Save the map at home on Wi-Fi: <b>Map → Save the lease map for no-signal use</b>. Do it again if the map looks blurry.</li>
     <li>GPS works with no signal. Your dot, the map, stands and tools all work.</li>
     <li>Pins, sits, check-ins and harvests save on your phone and upload as soon as you get a bar. Don't enter them twice.</li>
     <li>Wind and weather need a signal. With none, the app shows the last forecast it got.</li>
@@ -292,11 +300,13 @@ footer{padding-block:28px 48px;color:var(--muted);font-size:14px}
   </ol>
 </section>
 
-<section id="settings" data-k="settings sign out rut dates admin property stand editor add stand members code">
+<section id="settings" data-k="settings help guide intro offline save map download sign out rut dates admin property stand editor add stand members code">
   <h2>Settings</h2>
   <ul>
     <li>See who you're signed in as, or <span class="btn">Sign out of this phone</span>.</li>
+    <li><b>Help</b>: open this <span class="btn">Field guide</span> or <span class="btn">Watch the intro</span>.</li>
     <li><b>Rut starts / Rut ends</b> help Hunt plan weigh midday sits.</li>
+    <li><b>Offline map</b>: <span class="btn">Save the lease map for no-signal use</span> (see <a href="#offline">No signal</a>).</li>
   </ul>
   <h3>For the admin</h3>
   <ul>
@@ -322,7 +332,7 @@ footer{padding-block:28px 48px;color:var(--muted);font-size:14px}
   <h2>Help</h2>
   <details><summary>My code doesn't work</summary><p>Check for typos. If the club changed it, ask the admin for your new one.</p></details>
   <details><summary>My cone points the wrong way</summary><p>Allow motion &amp; orientation in your phone's settings for your browser. Hold the phone flat, top pointed where you're facing. Wave it in a figure-8 to calibrate. Near a metal stand the compass can drift.</p></details>
-  <details><summary>The map is blank on the lease</summary><p>You need to save the map at home first: Map → Save the lease map for no-signal use.</p></details>
+  <details><summary>The map is blank on the lease</summary><p>You need to save the map at home first: Settings → Offline map → Save the lease map for no-signal use. <a href="#offline">How</a></p></details>
   <details><summary>My pin or sit isn't showing for others</summary><p>It's waiting on your phone for a signal. Open the app once you have a bar and give it a minute.</p></details>
   <details><summary>My track has a straight line in it</summary><p>Your screen locked and GPS paused. Keep the app open and the screen on while recording.</p></details>
   <details><summary>Something else is broken</summary><p>Tell Jake. A screenshot helps.</p></details>
