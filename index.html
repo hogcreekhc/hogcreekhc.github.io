@@ -1031,7 +1031,7 @@ function drawCones(){
   if(map.hasLayer(pinLayer)&&pinFilter.has("stand")) PINS.filter(p=>!p.deleted&&p.type==="stand"&&standShown("pin:"+p.id)).forEach(p=>cone([+p.lat,+p.lon],"#ffffff"));
 }
 /* ---------- open a spot in the phone's own maps app: Apple Maps on iPhone, Google Maps on Android, both elsewhere ---------- */
-const IOS=/iPhone|iPad|iPod/.test(navigator.userAgent)||(navigator.platform==="MacIntel"&&navigator.maxTouchPoints>1), ANDROID=/Android/i.test(navigator.userAgent);
+const ANDROID=/Android/i.test(navigator.userAgent), IOS=!ANDROID&&(/iPhone|iPad|iPod/.test(navigator.userAgent)||(navigator.platform==="MacIntel"&&navigator.maxTouchPoints>1));   // iPads report as a Mac with touch
 function mapsUrls(ll,label){const la=(+ll[0]).toFixed(6),lo=(+ll[1]).toFixed(6);
   return {apple:`https://maps.apple.com/?ll=${la},${lo}&q=${encodeURIComponent(label||"Hog Creek spot")}&t=k&z=19`,
           google:`https://www.google.com/maps/@?api=1&map_action=map&center=${la},${lo}&zoom=19&basemap=satellite`}}
