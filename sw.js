@@ -1,5 +1,5 @@
 // Hog Creek Lease offline helper: keeps the app and saved map tiles on the phone.
-const SHELL = 'hc-shell-v19', TILES = 'hc-tiles-v1';
+const SHELL = 'hc-shell-v20', TILES = 'hc-tiles-v1';
 const SHELL_FILES = ['./', './index.html', './manifest.json',
   './icons/logo.svg', './icons/apple-touch-icon.png', './icons/favicon-32.png', './icons/icon-192.png', './icons/icon-512.png', './icons/icon-maskable-512.png',
   'https://cdn.jsdelivr.net/npm/leaflet-rotate@0.2.8/dist/leaflet-rotate-src.js',

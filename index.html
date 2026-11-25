@@ -221,6 +221,16 @@ label.f{display:grid;gap:4px;font:500 12px var(--mono);color:var(--muted);text-t
 input[type=range]{padding:0;accent-color:var(--accent)}
 .conebar{margin:2px 0 10px;min-width:0;max-width:100%}.conebar .ct{display:flex;align-items:center;justify-content:space-between;gap:8px;font-size:14px;margin-bottom:2px}
 .conebar input{width:100%}
+.snap{display:grid;gap:6px;padding:10px 12px;border:1px solid var(--good);border-radius:10px;background:#1b2a1d}
+.snap .row .btn{padding:6px 16px}
+.gcban{display:grid;gap:6px;padding:10px 12px;border:1px solid var(--ok);border-radius:10px;background:#3a3214;color:#fff2c4}
+.gcban a{color:#ffd34d;font-weight:600}
+.gcban .m{font:12px var(--mono);color:#e9d9a0}
+.gcban.late{border-color:var(--bad);background:#3d1a16}
+.sg-ar{width:22px;height:22px;pointer-events:none}.sg-ar svg{display:block}
+.sg-h{width:30px;height:30px;border-radius:50%;background:rgba(255,255,255,.25);border:2px dashed #fff}
+.hint{font:12px var(--body);color:var(--muted);margin-top:-4px}
+#sightWhenRow input{min-width:0}
 .cstrip{display:flex;width:100%;min-width:0;gap:4px;overflow-x:auto;padding:4px 0 6px;scrollbar-width:none}.cstrip::-webkit-scrollbar{display:none}
 .cstrip button{flex:none;width:52px;margin:0;padding:5px 0;border:1px solid transparent;border-radius:9px;background:var(--panel2);color:inherit;font:inherit;font-size:11px;line-height:1.25;display:grid;justify-items:center;gap:1px;cursor:pointer}
 .cstrip button[aria-pressed=true]{border-color:var(--accent);background:rgba(255,122,61,.18)}
@@ -287,7 +297,8 @@ input[type=range]{padding:0;accent-color:var(--accent)}
     </section>
 
     <section class="pane" id="p-log">
-      <div class="row"><button class="btn primary" id="btnLogSit">Log a sit</button><button class="btn" id="btnAddHarvest">Add a harvest</button></div>
+      <div id="gcBanner" style="display:grid;gap:8px"></div>
+      <div class="row"><button class="btn primary" id="btnLogSit">Log a sit</button><button class="btn" id="btnAddSight">Log a sighting</button><button class="btn" id="btnAddHarvest">Add a harvest</button></div>
       <div class="sec">Stands by the numbers</div>
       <div class="plist" id="standStats"></div>
       <div class="sec">Harvests this season</div>
@@ -295,6 +306,9 @@ input[type=range]{padding:0;accent-color:var(--accent)}
       <div class="plist" id="harvList"></div>
       <div class="sec">Recent sits</div>
       <div class="plist" id="sitList"></div>
+      <div class="sec">Deer sightings</div>
+      <div class="filters" id="sightFiltLog"></div>
+      <div class="plist" id="sightList"></div>
     </section>
 
     <section class="pane" id="p-work">
@@ -318,10 +332,13 @@ input[type=range]{padding:0;accent-color:var(--accent)}
       <div class="layers" id="standList"></div>
       <div class="sec">Overlays</div>
       <div class="layers" id="overLayers"></div>
+      <div class="sec">Sightings shown</div>
+      <div class="filters" id="sightFiltMap"></div>
       <div class="sec">Tools</div>
       <div class="row"><button class="btn" id="btnMeasure">Measure distance / area</button><button class="btn" id="btnBlood">Start a blood trail</button></div>
       <div class="row"><button class="btn" id="btnFit">Zoom to property</button><button class="btn" id="btnTrack">Start a track</button></div>
       <div class="row"><button class="btn" id="btnTrailDraw">Draw a deer trail</button><button class="btn" id="btnRoadDraw">Draw a road</button></div>
+      <div class="row"><button class="btn" id="btnSightMap">Log a deer sighting</button></div>
       <p class="note">To map a deer trail or a road by walking or driving it, use Start a track, then choose "Save as deer trail" or "Save as road" when you stop.</p>
       <div class="sec">Saved tracks <span style="text-transform:none;letter-spacing:0">(on this phone)</span></div>
       <div class="layers" id="trackList"></div>
@@ -372,6 +389,7 @@ input[type=range]{padding:0;accent-color:var(--accent)}
 <div class="modal" id="checkModal" hidden>
   <div class="card">
     <h2>Where are you hunting?</h2>
+    <div class="snap" id="checkSnap" hidden></div>
     <div class="plist" id="checkList"></div>
     <button class="btn" type="button" id="checkCancel">Cancel</button>
   </div>
@@ -407,6 +425,7 @@ input[type=range]{padding:0;accent-color:var(--accent)}
 <div class="modal" id="sitModal" hidden>
   <form class="card" id="sitForm">
     <h2>Log a sit</h2>
+    <div class="snap" id="sitSnap" hidden></div>
     <label class="f">Stand<select id="sitStand"></select></label>
     <div class="row">
       <label class="f" style="flex:1">Date<input id="sitDate" type="date"></label>
@@ -418,6 +437,9 @@ input[type=range]{padding:0;accent-color:var(--accent)}
       <label class="f" style="flex:1">Bucks seen<input id="sitBucks" type="number" min="0" inputmode="numeric" value="0"></label>
     </div>
     <label class="f">Other game<input id="sitOther" placeholder="2 gobblers, hogs, wood ducks…"></label>
+    <div class="sec">Sightings this sit</div>
+    <div class="plist" id="sitSights"></div>
+    <div class="row"><button class="btn" type="button" id="sitAddSight">+ Add a sighting (arrow on the map)</button></div>
     <label class="f">Notes<textarea id="sitNotes" rows="2" placeholder="Came down the drainage at 7:40…"></textarea></label>
     <div class="status" id="sitWind"></div>
     <div class="row"><button class="btn primary" type="submit">Save sit</button><button class="btn" type="button" data-close>Skip</button></div>
@@ -459,20 +481,50 @@ input[type=range]{padding:0;accent-color:var(--accent)}
 
 <div class="modal" id="harvModal" hidden>
   <form class="card" id="harvForm">
-    <h2>Add a harvest</h2>
+    <h2 id="harvTitle">Add a harvest</h2>
     <div class="types" id="harvSpecies"></div>
     <div class="types" id="harvSex"></div>
     <div class="row">
       <label class="f" style="flex:1">Points<input id="harvPts" type="number" min="0" inputmode="numeric"></label>
       <label class="f" style="flex:1">Weight (lb)<input id="harvWt" type="number" min="0" inputmode="numeric"></label>
-      <label class="f" style="flex:1">Date<input id="harvDate" type="date"></label>
     </div>
+    <div class="hint" id="harvPtsHint">Count every tip at least 1 inch long, brow tines included.</div>
+    <div class="row">
+      <label class="f" style="flex:1">Date<input id="harvDate" type="date"></label>
+      <label class="f" style="flex:1">Time<input id="harvTime" type="time"></label>
+    </div>
+    <div class="snap" id="harvSnap" hidden></div>
     <label class="f">Stand<select id="harvStand"></select></label>
+    <div class="row" style="flex-wrap:nowrap;align-items:end">
+      <label class="f" style="flex:1">Game Check #<input id="harvGC" maxlength="40" autocapitalize="characters" spellcheck="false" placeholder="Confirmation number"></label>
+      <label class="sharebox" style="flex:none;padding:9px 12px"><input type="checkbox" id="harvRep"><span><b>Reported</b></span></label>
+    </div>
     <label class="f">Notes<textarea id="harvNotes" rows="2" placeholder="Shot at 7:52, 60 yd, ran 40 yd…"></textarea></label>
     <label class="f">Photo<input id="harvPhoto" type="file" accept="image/*"></label>
     <img id="harvPrev" alt="" style="max-width:100%;border-radius:10px" hidden>
     <div class="status" id="harvMsg"></div>
     <div class="row"><button class="btn primary" type="submit" id="harvSave">Save harvest</button><button class="btn" type="button" data-close>Cancel</button></div>
+  </form>
+</div>
+
+<div class="modal" id="sightModal" hidden>
+  <form class="card" id="sightForm">
+    <h2>Deer sighting</h2>
+    <div class="status" id="sightInfo"></div>
+    <div class="types" id="sightKind"></div>
+    <div class="row" style="flex-wrap:nowrap">
+      <label class="f" style="flex:1">How many<input id="sightCount" type="number" min="1" max="99" inputmode="numeric" value="1"></label>
+      <label class="f" style="flex:1" id="sightPtsWrap">Points<input id="sightPts" type="number" min="0" max="40" inputmode="numeric" placeholder="?"></label>
+    </div>
+    <div class="hint" id="sightPtsHint">Count every tip at least 1 inch long, brow tines included.</div>
+    <label class="f" id="sightWhenRow">When<input id="sightWhen" type="datetime-local"></label>
+    <div class="sec">What it was doing</div>
+    <div class="types" id="sightBeh"></div>
+    <div class="snap" id="sightSnap" hidden></div>
+    <label class="f">Stand<select id="sightStand"></select></label>
+    <div class="status" id="sightWind"></div>
+    <label class="f">Note<textarea id="sightNote" rows="2" maxlength="300" placeholder="Nose down, came out of the pines"></textarea></label>
+    <div class="row"><button class="btn primary" type="submit">Save sighting</button><button class="btn" type="button" id="sightRedraw">Redraw arrow</button><button class="btn" type="button" id="sightCancel">Cancel</button></div>
   </form>
 </div>
 
@@ -502,6 +554,11 @@ input[type=range]{padding:0;accent-color:var(--accent)}
 <div class="toolbar" id="trailBar" hidden>
   <div style="flex:1;min-width:0"><div class="navt" id="tdTxt">Deer trail</div><div class="navs" id="tdSub">Tap the map along the trail, in order</div></div>
   <button class="btn" id="tdUndo">Undo</button><button class="btn primary" id="tdDone">Done</button><button class="btn" id="tdCancel">Cancel</button>
+</div>
+
+<div class="toolbar wrap" id="sightBar" hidden>
+  <div style="flex:1 1 100%;min-width:0"><div class="navt" id="sdTxt">Deer sighting</div><div class="navs" id="sdSub">Tap where the deer was</div></div>
+  <button class="btn" id="sdUndo">Undo</button><button class="btn primary" id="sdDone">Next</button><button class="btn" id="sdCancel">Cancel</button>
 </div>
 
 <div class="toolbar" id="measureBar" hidden>
@@ -705,17 +762,19 @@ const coneLayer=L.layerGroup(); ov["Scent cones"]=coneLayer;
 const trackLayer=L.layerGroup(); ov["Tracks"]=trackLayer;
 const routeLayer=L.layerGroup(); ov["Walk-in routes"]=routeLayer;
 const trailLayer=L.layerGroup(); ov["Deer trails"]=trailLayer;
+const sightLayer=L.layerGroup(); ov["Sightings"]=sightLayer;
 const hunterLayer=L.layerGroup(); ov["Hunters"]=hunterLayer;
 const mateLayer=L.layerGroup(); ov["Members sharing location"]=mateLayer;
 const taskLayer=L.layerGroup(); ov["Work list"]=taskLayer;
 const harvLayer=L.layerGroup(); ov["Harvests"]=harvLayer;
 const navLayer=L.layerGroup().addTo(map), measLayer=L.layerGroup().addTo(map), bloodLayer=L.layerGroup().addTo(map);
-const defaultsOn=["Public land (WMA)","Neighbor lines","Members sharing location","Work list","Harvests","Hunters","Boundary","Roads","Camp","Stands","Club pins","Scent cones","Tracks","Walk-in routes","Deer trails"];
+const defaultsOn=["Sightings","Public land (WMA)","Neighbor lines","Members sharing location","Work list","Harvests","Hunters","Boundary","Roads","Camp","Stands","Club pins","Scent cones","Tracks","Walk-in routes","Deer trails"];
 let ovOn=S.get("ov",defaultsOn).map(n=>({"Blowdown & scrape line":"Scrape line","Slope (flat / steep)":SLOPE,"My track":"Tracks"})[n]||n);
 // one time: contours used to start on over the aerial; turn them off once (members can switch them back on)
 if(S.get("ovV",0)<1){ ovOn=ovOn.filter(n=>n!=="10 ft contours"); S.set("ov",ovOn); S.set("ovV",1); }
 if(S.get("ovV",0)<2){ if(!ovOn.includes("Walk-in routes")) ovOn.push("Walk-in routes"); S.set("ov",ovOn); S.set("ovV",2); }
 if(S.get("ovV",0)<3){ if(!ovOn.includes("Deer trails")) ovOn.push("Deer trails"); S.set("ov",ovOn); S.set("ovV",3); }
+if(S.get("ovV",0)<4){ if(!ovOn.includes("Sightings")) ovOn.push("Sightings"); S.set("ov",ovOn); S.set("ovV",4); }
 Object.entries(ov).forEach(([n,l])=>{if(ovOn.includes(n)) l.addTo(map)});
 function fitLease(){if(!LEASE)return;const h=document.body.classList.contains("min")?70:Math.round(innerHeight*.44)+10;map.fitBounds(leaseBounds(),{paddingTopLeft:[20,110],paddingBottomRight:[70,h]})}
 // All of the club's properties. Older backends only sent one boundary.
@@ -1160,7 +1219,7 @@ function applyServer(j){
   if(!QUEUE.length){
     const keepPhotos=Object.fromEntries(HARV.filter(h=>h._photo).map(h=>[h.id,h._photo]));
     if(j.settings){CSET=j.settings;S.set("cset",CSET)}
-    RES=j.reservations||[]; SITS=j.sits||[]; TASKS=j.tasks||[]; MEMBERS=j.members||[]; if(j.trails) TRAILS=j.trails; if(j.roads) ROADS=j.roads; if(j.camPhotos) CAMS=j.camPhotos;
+    RES=j.reservations||[]; SITS=j.sits||[]; TASKS=j.tasks||[]; MEMBERS=j.members||[]; if(j.trails) TRAILS=j.trails; if(j.roads) ROADS=j.roads; if(j.camPhotos) CAMS=j.camPhotos; if(j.sightings) SIGHTS=j.sightings;
     HARV=(j.harvests||[]).map(h=>(!h.photoId&&keepPhotos[h.id])?Object.assign(h,{_photo:keepPhotos[h.id]}):h);
     saveData();
   }
@@ -1172,8 +1231,8 @@ function applyServer(j){
   if(fresh) renderAll(); else renderAdmin();
 }
 function signOut(silent){
-  cfg.code=""; S.set("cfg",cfg); ME=null; LEASE=null; PINS=[]; QUEUE=[]; CHECKINS=[]; RES=[]; SITS=[]; TASKS=[]; HARV=[]; MEMBERS=[]; TRAILS=[]; CAMS=[]; ROADS=[];
-  ["me","lease","pins","queue","track","checkins","res","sits","tasks","harv","members"].forEach(k=>S.set(k,null)); hunterLayer.clearLayers();
+  cfg.code=""; S.set("cfg",cfg); ME=null; LEASE=null; PINS=[]; QUEUE=[]; CHECKINS=[]; RES=[]; SITS=[]; TASKS=[]; HARV=[]; MEMBERS=[]; TRAILS=[]; CAMS=[]; ROADS=[]; SIGHTS=[];
+  ["me","lease","pins","queue","track","checkins","res","sits","tasks","harv","members","sights"].forEach(k=>S.set(k,null)); hunterLayer.clearLayers();
   stopNav(); taskLayer.clearLayers(); harvLayer.clearLayers(); LOCS=[]; S.set("locs",null); mateLayer.clearLayers(); shareOn=false; S.set("share",false);
   buildLease(false); pinLayer.clearLayers(); coneLayer.clearLayers();
   document.getElementById("whoami").textContent="Not signed in";
@@ -1247,6 +1306,8 @@ function spotsForCheckin(){
 function openCheckin(){
   if(!ME){openSignIn();return}
   const list=document.getElementById("checkList"); list.innerHTML="";
+  const nr=nearStand(me);
+  snapAsk($$("checkSnap"),nr,true,v=>{ if(v) checkIn({stand:nr.s.id,label:`${nr.s.id} ${nr.s.name}`,ll:nr.s.ll}); else $$("checkSnap").hidden=true },"Check in at");
   if(me){const r=document.createElement("div");r.className="prow";r.innerHTML=`<div class="picon" style="background:#4aa3ff">Me</div><div><div class="t">Right where I am</div><div class="m">Uses your GPS location</div></div><div></div>`;r.onclick=()=>checkIn({stand:"gps:"+ME.name,label:"GPS spot",ll:me});list.appendChild(r)}
   spotsForCheckin().slice(0,40).forEach(o=>{
     const who=CHECKINS.filter(c=>c.stand===o.stand&&c.name!==ME.name).map(c=>c.name);
@@ -1425,8 +1486,8 @@ if(S.get("offlineAt",0)){document.getElementById("offlineStatus").textContent="L
 /* ================= club data: reservations, sits, tasks, harvests ================= */
 let LOCS=S.get("locs",[]);
 let CSET=Object.assign({reservations:"on",on_property_only:"yes",days_ahead:1,morning_opens_minutes_before:null,morning_no_show_minutes:30,evening_no_show_minutes:30},S.get("cset",{}));
-let RES=S.get("res",[]), SITS=S.get("sits",[]), TASKS=S.get("tasks",[]), HARV=S.get("harv",[]), MEMBERS=S.get("members",[]), TRAILS=S.get("trails",[]), CAMS=S.get("cams",[]);
-function saveData(){S.set("res",RES);S.set("sits",SITS);S.set("tasks",TASKS);S.set("harv",HARV);S.set("members",MEMBERS);S.set("trails",TRAILS);S.set("cams",CAMS);S.set("roads",ROADS)}
+let RES=S.get("res",[]), SITS=S.get("sits",[]), TASKS=S.get("tasks",[]), HARV=S.get("harv",[]), MEMBERS=S.get("members",[]), TRAILS=S.get("trails",[]), CAMS=S.get("cams",[]), SIGHTS=S.get("sights",[]);
+function saveData(){S.set("res",RES);S.set("sits",SITS);S.set("tasks",TASKS);S.set("harv",HARV);S.set("members",MEMBERS);S.set("trails",TRAILS);S.set("cams",CAMS);S.set("roads",ROADS);S.set("sights",SIGHTS)}
 const uid=()=>Date.now().toString(36)+Math.random().toString(36).slice(2,7);
 const $$=id=>document.getElementById(id);
 function showModal(id){$$(id).hidden=false}
@@ -1435,7 +1496,7 @@ document.querySelectorAll("[data-close]").forEach(b=>b.onclick=()=>b.closest(".m
 function enqueue(item){QUEUE.push(item);S.set("queue",QUEUE);saveData();renderClubData();sync()}
 function onPosted(item,r){
   if(item.action==="addCamPhoto"&&r&&r.photoId){const c=CAMS.find(x=>x.id===item.id);if(c){c.photoId=r.photoId;delete c._blob;delete c._pending;saveData()}}
-  if(item.action==="addHarvest"&&r&&r.photoId){const h=HARV.find(x=>x.id===item.id);if(h){h.photoId=r.photoId;delete h._photo;saveData()}}
+  if((item.action==="addHarvest"||item.action==="updateHarvest")&&r&&r.photoId){const h=HARV.find(x=>x.id===item.id);if(h){h.photoId=r.photoId;delete h._photo;saveData()}}
 }
 const canEdit=row=>ME&&(ME.admin||row.name===ME.name||row.by===ME.name);
 function spotList(){return spotsForCheckin().map(o=>({stand:o.stand,label:o.label,ll:o.ll}))}
@@ -1451,7 +1512,7 @@ function chips(el,items,cur,onPick){
 const localISO=(date,hm)=>new Date(`${date}T${hm||"00:00"}`).toISOString();
 const hm=d=>{const x=new Date(d);return String(x.getHours()).padStart(2,"0")+":"+String(x.getMinutes()).padStart(2,"0")};
 const ymd=d=>dayKey(new Date(d));
-function renderClubData(){renderRes();renderLog();renderTasks();renderTaskLayer();renderHarvLayer();renderTrails();renderRoads()}
+function renderClubData(){renderRes();renderLog();renderTasks();renderTaskLayer();renderHarvLayer();renderTrails();renderRoads();renderSightings();renderGC()}
 
 /* ---------- legal light ---------- */
 function renderLight(){
@@ -1596,6 +1657,11 @@ async function windAtHour(t){
 }
 // right before a queued item is sent: attach the photo bytes, and fill in the wind if it isn't known yet
 async function prepItem(item){
+  if(item.action==="addSighting"&&(item.windDir===""||item.windDir==null)&&item.date&&item.time){   // older than the forecast: look up the wind for that hour
+    const w=await windAtHour(item.date+"T"+item.time);
+    if(w){item.windDir=w.dir; item.windSp=w.sp; S.set("queue",QUEUE); const x=SIGHTS.find(v=>v.id===item.id); if(x){x.windDir=w.dir;x.windSp=w.sp;saveData()}}
+    return item;
+  }
   if(item.action!=="addCamPhoto"&&item.action!=="updateCamPhoto") return item;
   const out=Object.assign({},item);
   if((out.action==="addCamPhoto"||out.time!=null)&&(out.windDir===""||out.windDir==null)){
@@ -1924,9 +1990,14 @@ function renderRes(){
 }
 
 /* ---------- sit log ---------- */
+let sitId=null;
 function openSit(pre={}){
   if(!ME){openSignIn();return}
-  fillSpots($$("sitStand"),pre.stand);
+  sitId=uid();
+  const nr=pre.stand?null:nearStand(me);
+  fillSpots($$("sitStand"),pre.stand||(nr&&nr.s.id));
+  snapAsk($$("sitSnap"),nr,true,v=>{$$("sitStand").value=v?nr.s.id:(me?"gps":$$("sitStand").options[0]?.value)});
+  renderSitSights();
   const end=new Date(), start=pre.start?new Date(pre.start):new Date(Date.now()-3*3600e3);
   $$("sitDate").value=ymd(start); $$("sitStart").value=hm(start); $$("sitEnd").value=hm(end);
   ["sitDoes","sitBucks"].forEach(i=>$$(i).value="0"); $$("sitOther").value=""; $$("sitNotes").value="";
@@ -1938,9 +2009,9 @@ $$("sitForm").onsubmit=e=>{
   e.preventDefault(); const sp=pickedSpot($$("sitStand")); if(!sp) return;
   const date=$$("sitDate").value, start=localISO(date,$$("sitStart").value), end=localISO(date,$$("sitEnd").value);
   const w=windAt(new Date((Date.parse(start)+Date.parse(end))/2));
-  const s={id:uid(),name:ME.name,stand:sp.stand==="gps"?"gps":sp.stand,label:sp.label,date,start,end,windDir:w?Math.round(w.dir):"",windMph:w?Math.round(w.sp):"",
+  const s={id:sitId||uid(),name:ME.name,stand:sp.stand==="gps"?"gps":sp.stand,label:sp.label,date,start,end,windDir:w?Math.round(w.dir):"",windMph:w?Math.round(w.sp):"",
     does:+$$("sitDoes").value||0,bucks:+$$("sitBucks").value||0,other:$$("sitOther").value.trim(),notes:$$("sitNotes").value.trim(),_pending:true};
-  SITS.unshift(s); hideModal("sitModal"); toast("Sit logged");
+  SITS.unshift(s); hideModal("sitModal"); sitId=null; toast("Sit logged");
   const {_pending,...send}=s; enqueue(Object.assign({action:"logSit"},send));
 };
 function deleteSit(id){SITS=SITS.filter(s=>s.id!==id);enqueue({action:"deleteSit",id});toast("Sit deleted")}
@@ -1982,7 +2053,9 @@ function renderLog(){
   HARV.slice().sort((a,b)=>String(b.date).localeCompare(String(a.date))).slice(0,40).forEach(h=>{
     const el=document.createElement("div");el.className="prow";el.style.gridTemplateColumns="30px 1fr";
     const src=h._photo||(h.photoId?`https://drive.google.com/thumbnail?id=${encodeURIComponent(h.photoId)}&sz=w800`:"");
-    el.innerHTML=`<div class="harv-ic">${esc((h.species||"?")[0])}</div><div style="min-width:0"><div class="t">${esc(h.name)} · ${esc(h.species)}${h.sex?" "+esc(h.sex):""}${h.points?` · ${esc(h.points)} pt`:""}${h.weight?` · ${esc(h.weight)} lb`:""}</div><div class="m">${esc(h.date)}${h.stand?" · "+esc(h.stand):""}${h._pending?" · waiting for signal":""}</div>${h.notes?`<div style="font-size:13px">${esc(h.notes)}</div>`:""}${src?`<img class="thumb" src="${src}" alt="Harvest photo" loading="lazy">`:""}<div class="mini"></div></div>`;
+    el.innerHTML=`<div class="harv-ic">${esc((h.species||"?")[0])}</div><div style="min-width:0"><div class="t">${esc(h.name)} · ${esc(h.species)}${h.sex?" "+esc(h.sex):""}${h.points?` · ${esc(h.points)} pt`:""}${h.weight?` · ${esc(h.weight)} lb`:""}</div><div class="m">${esc(h.date)}${h.time?" "+esc(fmtHM(h.time)):""}${h.stand?" · "+esc(h.stand):""}${h._pending?" · waiting for signal":""}</div>${h.reported===true?`<div class="m" style="color:var(--good)">✓ Reported to Game Check${h.gameCheck?" · #"+esc(h.gameCheck):""}</div>`:""}${h.notes?`<div style="font-size:13px">${esc(h.notes)}</div>`:""}${needsGC(h)?gcHtml(h):""}${src?`<img class="thumb" src="${src}" alt="Harvest photo" loading="lazy">`:""}<div class="mini"></div></div>`;
+    if(canEdit(h)){const b=document.createElement("button");b.className="btn";b.textContent="Edit";b.onclick=()=>openHarvest(h);el.querySelector(".mini").appendChild(b)}
+    if(canEdit(h)&&needsGC(h)){const b=document.createElement("button");b.className="btn primary";b.textContent="I reported it";b.onclick=()=>openHarvest(h,true);el.querySelector(".mini").appendChild(b)}
     if(canEdit(h)){const x=document.createElement("button");x.className="btn danger";x.textContent="Delete";x.onclick=()=>{if(x.dataset.sure){HARV=HARV.filter(v=>v.id!==h.id);enqueue({action:"deleteHarvest",id:h.id})}else{x.dataset.sure=1;x.textContent="Tap again to delete"}};el.querySelector(".mini").appendChild(x)}
     hl.appendChild(el)});
   if(!HARV.length) hl.innerHTML='<div class="note">No harvests logged yet.</div>';
@@ -1999,14 +2072,25 @@ function renderLog(){
 /* ---------- harvest log ---------- */
 let hSpecies="Deer", hSex="Buck", hPhoto=null;
 const SEXES={Deer:["Buck","Doe"],Turkey:["Gobbler","Jake","Hen"],Hog:["Boar","Sow"],Duck:["Drake","Hen"],Other:["—"]};
-function openHarvest(){
+let hEdit=null;
+function openHarvest(edit,focusGC){
   if(!ME){openSignIn();return}
-  hSpecies="Deer";hSex="Buck";hPhoto=null;
-  chips($$("harvSpecies"),Object.keys(SEXES),hSpecies,v=>{hSpecies=v;hSex=SEXES[v][0];chips($$("harvSex"),SEXES[v],hSex,x=>hSex=x)});
-  chips($$("harvSex"),SEXES.Deer,hSex,x=>hSex=x);
-  $$("harvPts").value="";$$("harvWt").value="";$$("harvDate").value=dayKey(new Date());$$("harvNotes").value="";$$("harvPhoto").value="";$$("harvPrev").hidden=true;$$("harvMsg").textContent="";
-  fillSpots($$("harvStand"),CHECKINS.find(c=>c.name===ME.name)?.stand);
+  hEdit=edit&&edit.id?edit:null; const h=hEdit;
+  hSpecies=h?.species||"Deer"; if(!SEXES[hSpecies]) hSpecies="Other"; hSex=h?(h.sex||SEXES[hSpecies][0]):"Buck"; hPhoto=null;
+  const setSex=()=>chips($$("harvSex"),SEXES[hSpecies],hSex,x=>hSex=x);
+  chips($$("harvSpecies"),Object.keys(SEXES),hSpecies,v=>{hSpecies=v;hSex=SEXES[v][0];setSex();$$("harvPtsHint").hidden=v!=="Deer"}); setSex();
+  $$("harvPtsHint").hidden=hSpecies!=="Deer";
+  $$("harvTitle").textContent=h?"Edit harvest":"Add a harvest"; $$("harvSave").textContent=h?"Save changes":"Save harvest";
+  $$("harvPts").value=h?.points??""; $$("harvWt").value=h?.weight??""; $$("harvDate").value=h?String(h.date||""):dayKey(new Date()); $$("harvTime").value=h?(h.time||""):hm(new Date());
+  $$("harvNotes").value=h?.notes||""; $$("harvPhoto").value=""; $$("harvMsg").textContent=""; $$("harvGC").value=h?.gameCheck||""; $$("harvRep").checked=h?.reported===true;
+  const src=h&&(h._photo||(h.photoId?`https://drive.google.com/thumbnail?id=${encodeURIComponent(h.photoId)}&sz=w800`:""));
+  $$("harvPrev").hidden=!src; if(src) $$("harvPrev").src=src;
+  const sel=$$("harvStand");
+  if(h){ fillSpots(sel,null); const o=document.createElement("option"); o.value="keep"; o.textContent=h.stand?`${h.stand} (as saved)`:"(no stand)"; o._spot={stand:"keep",label:h.stand||"",ll:[h.lat,h.lon]}; sel.prepend(o); sel.value="keep"; $$("harvSnap").hidden=true }
+  else { const cur=CHECKINS.find(c=>c.name===ME.name)?.stand, nr=cur?null:nearStand(me);
+    fillSpots(sel,cur||(nr&&nr.s.id)); snapAsk($$("harvSnap"),nr,true,v=>{sel.value=v?nr.s.id:(me?"gps":sel.options[0]?.value)}) }
   showModal("harvModal");
+  if(focusGC) setTimeout(()=>{$$("harvRep").checked=true;$$("harvGC").focus();$$("harvGC").scrollIntoView({block:"center"})},50);
 }
 $$("btnAddHarvest").onclick=openHarvest;
 $$("harvPhoto").onchange=async e=>{
@@ -2020,19 +2104,216 @@ $$("harvPhoto").onchange=async e=>{
 };
 $$("harvForm").onsubmit=e=>{
   e.preventDefault(); const sp=pickedSpot($$("harvStand"));
-  const h={id:uid(),name:ME.name,date:$$("harvDate").value,species:hSpecies,sex:hSex==="—"?"":hSex,points:$$("harvPts").value,weight:$$("harvWt").value,
-    stand:sp?sp.label:"",lat:sp?+sp.ll[0]:(me?me[0]:""),lon:sp?+sp.ll[1]:(me?me[1]:""),notes:$$("harvNotes").value.trim(),_photo:hPhoto,_pending:true};
-  HARV.unshift(h); hideModal("harvModal"); toast("Harvest logged. Congrats!");
+  const f={date:$$("harvDate").value,time:$$("harvTime").value,species:hSpecies,sex:hSex==="—"?"":hSex,points:$$("harvPts").value,weight:$$("harvWt").value,
+    notes:$$("harvNotes").value.trim(),gameCheck:$$("harvGC").value.trim().slice(0,40),reported:$$("harvRep").checked};
+  if(f.gameCheck&&!f.reported) f.reported=true;   // a confirmation number means it was reported
+  if(hEdit){
+    const h=hEdit; if(sp&&sp.stand!=="keep") Object.assign(f,{stand:sp.label,lat:+sp.ll[0],lon:+sp.ll[1]});
+    Object.assign(h,f); if(hPhoto) h._photo=hPhoto;
+    const q=h._pending&&QUEUE.find(x=>x.action==="addHarvest"&&x.id===h.id);
+    if(q){Object.assign(q,f); if(hPhoto) q.photo=hPhoto.split(",")[1]; S.set("queue",QUEUE); saveData(); renderClubData()}
+    else enqueue(Object.assign({action:"updateHarvest",id:h.id},f,hPhoto?{photo:hPhoto.split(",")[1]}:{}));
+    hEdit=null; hideModal("harvModal"); toast(f.reported?"Harvest saved. Reported ✓":"Harvest updated"); return;
+  }
+  const h=Object.assign({id:uid(),name:ME.name,stand:sp?sp.label:"",lat:sp?+sp.ll[0]:(me?me[0]:""),lon:sp?+sp.ll[1]:(me?me[1]:""),_photo:hPhoto,_pending:true},f);
+  HARV.unshift(h); hideModal("harvModal");
   const {_photo,_pending,...send}=h; enqueue(Object.assign({action:"addHarvest",photo:hPhoto?hPhoto.split(",")[1]:""},send));
+  if(needsGC(h)){ selectTab("log"); collapse(false); document.querySelector(".body").scrollTop=0; toast(`Congrats! Report it to Georgia Game Check within ${GC_HOURS} hours.`) } else toast("Harvest logged. Congrats!");
 };
 function renderHarvLayer(){
   harvLayer.clearLayers();
   HARV.filter(h=>h.lat!==""&&h.lat!=null&&isFinite(+h.lat)).forEach(h=>{
     const src=h._photo||(h.photoId?`https://drive.google.com/thumbnail?id=${encodeURIComponent(h.photoId)}&sz=w400`:"");
     L.marker([+h.lat,+h.lon],{icon:L.divIcon({className:"lbl",html:`<div class="harv-ic">${esc((h.species||"?")[0])}</div>`,iconSize:[24,24],iconAnchor:[12,12]})})
-     .bindPopup(`<h4>${esc(h.species)} ${esc(h.sex||"")}</h4><div>${esc(h.name)} · ${esc(h.date)}${h.points?` · ${esc(h.points)} pt`:""}</div>${src?`<img class="thumb" src="${src}" alt="">`:""}`).addTo(harvLayer);
+     .bindPopup(`<h4>${esc(h.species)} ${esc(h.sex||"")}</h4><div>${esc(h.name)} · ${esc(h.date)}${h.points?` · ${esc(h.points)} pt`:""}</div>${needsGC(h)?gcHtml(h):""}${src?`<img class="thumb" src="${src}" alt="">`:""}`).addTo(harvLayer);
   });
 }
+
+/* ---------- Georgia Game Check reminder ---------- */
+// GA DNR (georgiawildlife.com/HarvestRecordGeorgiaGameCheck, checked Nov 25 2026) says deer and turkey must be reported within 24 hours.
+const GC_HOURS=24, GC_URL="https://gooutdoorsgeorgia.com/", GC_INFO="https://georgiawildlife.com/HarvestRecordGeorgiaGameCheck", GC_TEL="18003662661";
+const fmtHM=t=>{const m=/^(\d\d):(\d\d)/.exec(t||"");if(!m)return t||"";const h=+m[1];return `${h%12||12}:${m[2]} ${h<12?"AM":"PM"}`};
+const harvAt=h=>new Date(`${h.date}T${/^\d\d:\d\d/.test(h.time||"")?h.time:"12:00"}`);
+// deer and turkey only; older than 30 days is past nagging
+const needsGC=h=>h&&h.reported!==true&&["Deer","Turkey"].includes(h.species)&&/^\d{4}-\d\d-\d\d/.test(String(h.date||""))&&Date.now()-harvAt(h)<30*864e5;
+function gcHtml(h){
+  const due=new Date(+harvAt(h)+GC_HOURS*3600e3), left=(due-Date.now())/3600e3, late=left<0;
+  return `<div class="gcban${late?" late":""}"><div><b>Report to Georgia Game Check within ${GC_HOURS} hours</b></div>
+    <div class="m">${late?`Overdue since ${fmtD(due)} ${fmtT(due)}. Report it now.`:`Due ${fmtD(due)} ${fmtT(due)} · ${left<1?Math.max(1,Math.round(left*60))+" min":Math.floor(left)+" h"} left`}</div>
+    <div><a href="${GC_URL}" target="_blank" rel="noopener">Outdoors GA app / site</a> · <a href="tel:${GC_TEL}">Call 1-800-366-2661</a> · <a href="${GC_INFO}" target="_blank" rel="noopener">How it works</a></div>
+    <div class="m">Then add the confirmation # and check Reported on the harvest.</div></div>`;
+}
+function renderGC(){
+  const box=$$("gcBanner"); if(!box) return; box.innerHTML="";
+  HARV.filter(h=>ME&&h.name===ME.name&&needsGC(h)).forEach(h=>{
+    const w=document.createElement("div"); w.innerHTML=gcHtml(h); const ban=w.firstElementChild;
+    ban.insertAdjacentHTML("afterbegin",`<div class="m">Your ${esc(h.species.toLowerCase())}${h.sex?" ("+esc(h.sex.toLowerCase())+")":""}, ${esc(h.date)}</div>`);
+    const b=document.createElement("button"); b.className="btn primary"; b.style.justifySelf="start"; b.textContent="I reported it"; b.onclick=()=>openHarvest(h,true); ban.appendChild(b);
+    box.appendChild(ban);
+  });
+}
+
+/* ---------- snap logs to the nearest stand (within 40 yd) ---------- */
+const SNAP_M=40/1.0936;
+function nearStand(ll){
+  if(!ll||!LEASE) return null; let best=null,bd=1e9;
+  (LEASE.stands||[]).forEach(s=>{const d=dist(ll,s.ll); if(d<bd){bd=d;best=s}});
+  return best&&bd<=SNAP_M?{s:best,d:bd}:null;
+}
+// "Log at #1 Buck crossing?" with Yes picked by default. onPick(true|false) runs when they tap.
+function snapAsk(box,near,yes,onPick,verb){
+  box.innerHTML=""; box.hidden=!near; if(!near) return;
+  box.innerHTML=`<div>${verb||"Log at"} <b>${esc(sLbl(near.s.id))} ${esc(near.s.name)}</b>? <span class="pop-m">${yd(near.d)} yd away</span></div>`;
+  const r=document.createElement("div"); r.className="row";
+  [["Yes",true],["No",false]].forEach(([t,v])=>{const b=document.createElement("button");b.type="button";b.className="btn"+(v===yes?" primary":"");b.textContent=t;
+    b.onclick=()=>{snapAsk(box,near,v,onPick,verb);onPick(v)};r.appendChild(b)});
+  box.appendChild(r);
+}
+
+/* ---------- deer sightings: a dot where the deer was, an arrow for where it went ---------- */
+const SIGHT_C={Buck:"#ff5a3c",Doe:"#4fc3f7",Unknown:"#d0d0d0"};
+const BEHAVIORS=["Walking","Feeding","Chasing","Bedded","Running"];
+let sightRange=S.get("sightRange","season"), sightBuck=!!S.get("sightBuck",false);
+const seasonStart=()=>{const n=new Date(),y=n.getMonth()>=6?n.getFullYear():n.getFullYear()-1;return `${y}-07-01`};
+function sightShown(x){
+  if(sightBuck&&x.kind!=="Buck") return false;
+  if(sightRange==="week") return String(x.date)>=dayKey(new Date(Date.now()-6*864e5));
+  if(sightRange==="season") return String(x.date)>=seasonStart();
+  return true;
+}
+const sightTitle=x=>`${x.count>1?x.count+" ":""}${x.kind==="Unknown"?"Deer":x.kind+(x.count>1?"s":"")}${x.kind==="Buck"&&x.points!==""&&x.points!=null?` · ${x.points} pt`:""}`;
+const standTxt=id=>{if(!id) return ""; const s=(LEASE?.stands||[]).find(v=>v.id===id); return s?`${sLbl(s.id)} ${s.name}`:id};
+function sightArrowIcon(br,c){return L.divIcon({className:"lbl",html:`<div class="sg-ar" style="transform:rotate(calc(${br}deg + var(--mrot,0deg)))"><svg viewBox="0 0 22 22" width="22" height="22"><path d="M11 1 L20 20 L11 15 L2 20 Z" fill="${c}" stroke="#000" stroke-width="1.4" stroke-linejoin="round"/></svg></div>`,iconSize:[22,22],iconAnchor:[11,11]})}
+function sightPopup(x){
+  const d=document.createElement("div"), c=SIGHT_C[x.kind]||SIGHT_C.Unknown;
+  d.innerHTML=`<h4 style="color:${c}">${esc(sightTitle(x))}</h4><div>${esc(x.behavior||"")}${x.bearing!==""&&x.bearing!=null?`${x.behavior?" · ":""}heading ${card(+x.bearing)}`:""}</div>
+    <div class="pop-m">${esc(x.date)} ${esc(fmtHM(x.time))}${x.stand?" · from "+esc(standTxt(x.stand)):""}</div>
+    <div class="pop-m">${x.windDir!==""&&x.windDir!=null?`Wind ${card(+x.windDir)} ${Math.round(+x.windSp)} mph`:"Wind not known yet"} · ${esc(x.by||"Someone")}${x._pending?" · waiting to upload":""}</div>${x.note?`<div style="margin-top:4px">${esc(x.note)}</div>`:""}`;
+  if(canEdit(x)){const b=document.createElement("button");b.className="btn danger";b.style.marginTop="8px";b.textContent="Delete sighting";
+    b.onclick=()=>{if(!b.dataset.sure){b.dataset.sure=1;b.textContent="Tap again to delete";return} deleteSighting(x.id); map.closePopup()};d.appendChild(b)}
+  return d;
+}
+function deleteSighting(id){
+  const x=SIGHTS.find(v=>v.id===id); SIGHTS=SIGHTS.filter(v=>v.id!==id);
+  if(x&&x._pending){QUEUE=QUEUE.filter(q=>!(q.action==="addSighting"&&q.id===id)); S.set("queue",QUEUE); saveData(); renderClubData()}
+  else enqueue({action:"deleteSighting",id});
+  toast("Sighting deleted");
+}
+function renderSightFilters(){
+  ["sightFiltLog","sightFiltMap"].forEach(id=>{const box=$$(id); if(!box) return; box.innerHTML="";
+    [["week","This week"],["season","Season"],["all","All"]].forEach(([k,t])=>{const b=document.createElement("button");b.type="button";b.setAttribute("aria-pressed",sightRange===k);b.textContent=t;b.onclick=()=>{sightRange=k;S.set("sightRange",k);renderSightings()};box.appendChild(b)});
+    const b=document.createElement("button");b.type="button";b.setAttribute("aria-pressed",sightBuck);b.innerHTML=`<i style="background:${SIGHT_C.Buck}"></i>Bucks only`;b.onclick=()=>{sightBuck=!sightBuck;S.set("sightBuck",sightBuck);renderSightings()};box.appendChild(b);
+  });
+}
+function renderSightings(){
+  sightLayer.clearLayers(); renderSightFilters();
+  const shown=SIGHTS.filter(sightShown).sort((a,b)=>(a.date+a.time).localeCompare(b.date+b.time));
+  shown.forEach(x=>{
+    const c=SIGHT_C[x.kind]||SIGHT_C.Unknown, from=[+x.lat,+x.lon];
+    if(x.toLat!==""&&x.toLat!=null&&isFinite(+x.toLat)){
+      const to=[+x.toLat,+x.toLon], br=x.bearing!==""&&x.bearing!=null?+x.bearing:bearing(from,to);
+      L.polyline([from,to],{color:"#000",weight:6,opacity:.45,interactive:false}).addTo(sightLayer);
+      L.polyline([from,to],{color:c,weight:3.5}).bindPopup(()=>sightPopup(x)).addTo(sightLayer);
+      L.marker(to,{icon:sightArrowIcon(br,c),interactive:false,zIndexOffset:300}).addTo(sightLayer);
+    }
+    L.circleMarker(from,{radius:x.kind==="Buck"?7:6,color:"#000",weight:1.5,fillColor:c,fillOpacity:1}).bindPopup(()=>sightPopup(x)).addTo(sightLayer);
+  });
+  const list=$$("sightList"); if(!list) return; list.innerHTML="";
+  if(!shown.length) list.innerHTML=`<div class="note">${SIGHTS.length?"No sightings match the filter.":"No sightings yet. Tap Log a sighting, then tap where the deer was and where it went."}</div>`;
+  shown.slice().reverse().slice(0,40).forEach(x=>{
+    const el=document.createElement("div"); el.className="prow"; const c=SIGHT_C[x.kind]||SIGHT_C.Unknown;
+    el.innerHTML=`<div class="picon" style="background:${c};color:#111">${x.bearing!==""&&x.bearing!=null?`<span style="display:inline-block;transform:rotate(${+x.bearing}deg)">↑</span>`:"•"}</div><div style="min-width:0"><div class="t">${esc(sightTitle(x))}${x.behavior?` · <span style="font-weight:400">${esc(x.behavior.toLowerCase())}</span>`:""}</div><div class="m">${esc(x.date)} ${esc(fmtHM(x.time))} · ${esc(x.by)}${x.stand?" · "+esc(standTxt(x.stand)):""}${x.windDir!==""&&x.windDir!=null?` · wind ${card(+x.windDir)} ${Math.round(+x.windSp)}`:""}${x._pending?" · waiting for signal":""}</div>${x.note?`<div style="font-size:13px">${esc(x.note)}</div>`:""}</div><div class="m">${x.bearing!==""&&x.bearing!=null?card(+x.bearing):""}</div>`;
+    el.onclick=()=>{if(!map.hasLayer(sightLayer)) sightLayer.addTo(map); map.setView([+x.lat,+x.lon],18); collapse(true)};
+    list.appendChild(el);
+  });
+}
+
+// drawing: tap the deer, then tap (or drag the white ring) to where it went
+let SD=null;
+const sdLayer=L.layerGroup();
+function startSighting(ctx){
+  if(!ME){openSignIn();return}
+  SD={from:null,to:null,ctx:ctx||{}}; sdLayer.clearLayers().addTo(map);
+  rotPaused=true; setMapRot(0);   // marker dragging doesn't work on a rotated map
+  map.on("click",onSdClick); $$("sightBar").hidden=false; collapse(true); renderSd();
+}
+function onSdClick(e){ if(!SD) return; const p=[r6(e.latlng.lat),r6(e.latlng.lng)]; if(!SD.from) SD.from=p; else SD.to=p; renderSd() }
+function renderSd(){
+  if(!SD) return; sdLayer.clearLayers();
+  if(SD.from){
+    const line=L.polyline(SD.to?[SD.from,SD.to]:[],{color:"#fff",weight:4,dashArray:"6 5",interactive:false}).addTo(sdLayer);
+    const arrow=L.marker(SD.to||SD.from,{icon:sightArrowIcon(SD.to?bearing(SD.from,SD.to):0,"#fff"),interactive:false,opacity:SD.to?1:0}).addTo(sdLayer);
+    L.circleMarker(SD.from,{radius:8,color:"#000",weight:2,fillColor:"#ff5a3c",fillOpacity:1,interactive:false}).addTo(sdLayer);
+    const h=L.marker(SD.to||SD.from,{draggable:true,zIndexOffset:2000,icon:L.divIcon({className:"lbl",html:'<div class="sg-h"></div>',iconSize:[30,30],iconAnchor:[15,15]})}).addTo(sdLayer);
+    h.on("drag",ev=>{const q=ev.target.getLatLng(), p=[r6(q.lat),r6(q.lng)]; if(dist(SD.from,p)<3) return; SD.to=p; line.setLatLngs([SD.from,p]); arrow.setLatLng(p).setOpacity(1).setIcon(sightArrowIcon(bearing(SD.from,p),"#fff")); sdText()});
+    h.on("dragend",()=>renderSd());
+  }
+  sdText();
+}
+function sdText(){
+  $$("sdTxt").textContent=!SD.from?"Deer sighting":!SD.to?"Which way was it going?":`Heading ${card(bearing(SD.from,SD.to))} · ${yd(dist(SD.from,SD.to))} yd`;
+  $$("sdSub").textContent=!SD.from?"Tap the map where the deer was":!SD.to?"Tap where it went, or drag the white ring. Next skips the arrow.":"Tap again or drag the ring to fix it, then Next";
+}
+function endSd(){ map.off("click",onSdClick); sdLayer.clearLayers(); map.removeLayer(sdLayer); $$("sightBar").hidden=true; rotPaused=false; if(hdgUp&&lastHeading!=null) setMapRot(-lastHeading) }
+$$("sdUndo").onclick=()=>{ if(!SD) return; if(SD.to) SD.to=null; else SD.from=null; renderSd() };
+$$("sdCancel").onclick=()=>{ const ctx=SD?.ctx; SD=null; endSd(); if(ctx?.back==="sit") showModal("sitModal") };
+$$("sdDone").onclick=()=>{ if(!SD?.from){toast("Tap where the deer was first");return} const d=SD; SD=null; endSd(); openSightModal(d) };
+
+let sDraft=null, sKind="Buck", sBeh="";
+function openSightModal(d){
+  sDraft=d; const c=d.ctx||{};
+  if(!c.keep){ sKind="Buck"; sBeh=""; $$("sightCount").value="1"; $$("sightPts").value=""; $$("sightNote").value=""; $$("sightWhen").value=localStamp(new Date()); }
+  c.keep=true;
+  const setKind=()=>{ $$("sightPtsWrap").style.visibility=sKind==="Buck"?"":"hidden"; $$("sightPtsHint").hidden=sKind!=="Buck" };
+  chips($$("sightKind"),["Buck","Doe","Unknown"],sKind,v=>{sKind=v;setKind()}); setKind();
+  chips($$("sightBeh"),BEHAVIORS,sBeh,v=>{sBeh=v});
+  $$("sightInfo").textContent=d.to?`Heading ${card(bearing(d.from,d.to))} (${Math.round(bearing(d.from,d.to))}°)`:"No direction drawn";
+  // stand: the one you're checked in to (or the sit's stand), else the nearest within 40 yd of you
+  const sel=$$("sightStand"); sel.innerHTML='<option value="">No stand</option>';
+  (LEASE?.stands||[]).forEach(s=>{const o=document.createElement("option");o.value=s.id;o.textContent=`${sLbl(s.id)} ${s.name}`;sel.appendChild(o)});
+  const cur=c.stand||CHECKINS.find(x=>x.name===ME?.name)?.stand, curOk=(LEASE?.stands||[]).some(s=>s.id===cur);
+  const nr=curOk?null:nearStand(me);
+  if(c.chosenStand!==undefined) sel.value=c.chosenStand; else sel.value=curOk?cur:(nr?nr.s.id:"");
+  snapAsk($$("sightSnap"),c.chosenStand===undefined?nr:null,true,v=>{sel.value=v?nr.s.id:""});
+  sel.onchange=()=>{c.chosenStand=sel.value};
+  showSightWind(); $$("sightWhen").onchange=showSightWind;
+  showModal("sightModal");
+}
+function sightWhen(){const v=$$("sightWhen").value; return /^\d{4}-\d\d-\d\dT\d\d:\d\d/.test(v)?v.slice(0,16):localStamp(new Date())}
+function showSightWind(){
+  const w=windAt(new Date(sightWhen()));
+  $$("sightWind").textContent=w?`Wind saved with it: ${card(w.dir)} ${Math.round(w.sp)} mph`:"Wind for that hour gets looked up when it uploads.";
+}
+$$("sightRedraw").onclick=()=>{ const d=sDraft; hideModal("sightModal"); startSighting(d.ctx); };
+$$("sightCancel").onclick=()=>{ const c=sDraft?.ctx; sDraft=null; hideModal("sightModal"); if(c?.back==="sit") showModal("sitModal") };
+$$("sightForm").onsubmit=e=>{
+  e.preventDefault(); const d=sDraft; if(!d) return; const c=d.ctx||{};
+  const when=sightWhen(), w=windAt(new Date(when));
+  const x={id:"sg"+uid(),by:ME.name,date:when.slice(0,10),time:when.slice(11,16),stand:$$("sightStand").value,lat:d.from[0],lon:d.from[1],
+    toLat:d.to?d.to[0]:"",toLon:d.to?d.to[1]:"",bearing:d.to?Math.round(bearing(d.from,d.to)):"",kind:sKind,count:Math.max(1,Math.min(99,Math.round(+$$("sightCount").value)||1)),
+    points:sKind==="Buck"&&$$("sightPts").value!==""?Math.round(+$$("sightPts").value):"",behavior:sBeh,windDir:w?Math.round(w.dir):"",windSp:w?Math.round(w.sp):"",
+    note:$$("sightNote").value.trim().slice(0,300),sitId:c.sitId||"",_pending:true};
+  SIGHTS.push(x); hideModal("sightModal"); sDraft=null;
+  if(!map.hasLayer(sightLayer)) sightLayer.addTo(map);
+  const {_pending,...send}=x; enqueue(Object.assign({action:"addSighting"},send));
+  toast(`Saved: ${sightTitle(x)}${x.bearing!==""?" heading "+card(x.bearing):""}`);
+  if(c.back==="sit"){ // add it to the sit's deer counts
+    const mine=SIGHTS.filter(v=>v.sitId===c.sitId), n=k=>mine.filter(v=>v.kind===k).reduce((t,v)=>t+(+v.count||1),0);
+    $$("sitBucks").value=Math.max(+$$("sitBucks").value||0,n("Buck")); $$("sitDoes").value=Math.max(+$$("sitDoes").value||0,n("Doe"));
+    renderSitSights(); showModal("sitModal");
+  }
+};
+function renderSitSights(){
+  const box=$$("sitSights"); box.innerHTML=""; const mine=SIGHTS.filter(v=>sitId&&v.sitId===sitId);
+  if(!mine.length){box.innerHTML='<div class="note">None yet. Add each deer (or group) you saw, with the way it was going.</div>';return}
+  mine.forEach(x=>{const el=document.createElement("div");el.className="prow";
+    el.innerHTML=`<div class="picon" style="background:${SIGHT_C[x.kind]};color:#111">${x.bearing!==""?`<span style="display:inline-block;transform:rotate(${+x.bearing}deg)">↑</span>`:"•"}</div><div style="min-width:0"><div class="t">${esc(sightTitle(x))}</div><div class="m">${esc(fmtHM(x.time))}${x.behavior?" · "+esc(x.behavior.toLowerCase()):""}${x.bearing!==""?" · heading "+card(+x.bearing):""}</div></div><div></div>`;
+    const b=document.createElement("button");b.type="button";b.className="btn danger";b.style.padding="6px 10px";b.textContent="Remove";b.onclick=()=>{deleteSighting(x.id);renderSitSights()};el.lastElementChild.replaceWith(b);
+    box.appendChild(el)});
+}
+$$("sitAddSight").onclick=()=>{ const v=$$("sitStand").value; hideModal("sitModal"); startSighting({back:"sit",sitId,stand:(LEASE?.stands||[]).some(s=>s.id===v)?v:""}) };
+$$("btnAddSight").onclick=()=>startSighting();
+$$("btnSightMap").onclick=()=>startSighting();
 
 /* ---------- work list ---------- */
 let taskWhere="No spot";
@@ -2133,7 +2414,7 @@ $$("btnMeasure").onclick=startMeasure;
 /* ---------- floating bars stack under the top chips ---------- */
 function placeBars(){
   let y=document.querySelector(".top").getBoundingClientRect().bottom+8;
-  ["recBar","trailBar","navBar","bloodBar","measureBar","editBar","pickBar","pinPickBar"].forEach(id=>{const el=$$(id); if(!el.hidden){el.style.top=y+"px"; y+=el.offsetHeight+8}});
+  ["recBar","trailBar","sightBar","navBar","bloodBar","measureBar","editBar","pickBar","pinPickBar"].forEach(id=>{const el=$$(id); if(!el.hidden){el.style.top=y+"px"; y+=el.offsetHeight+8}});
 }
 new MutationObserver(placeBars).observe(document.body,{subtree:true,attributes:true,attributeFilter:["hidden"]});
 addEventListener("resize",placeBars);
