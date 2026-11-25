@@ -133,6 +133,16 @@ label.f{display:grid;gap:4px;font:500 12px var(--mono);color:var(--muted);text-t
 /* modal */
 .modal{position:fixed;inset:0;z-index:2000;background:rgba(0,0,0,.55);display:flex;align-items:flex-end;justify-content:center}
 .modal[hidden]{display:none}
+.viewer{position:fixed;inset:0;z-index:3000;background:rgba(0,0,0,.92);display:flex;flex-direction:column;align-items:center;justify-content:center;padding:calc(64px + env(safe-area-inset-top,0px)) 12px calc(16px + env(safe-area-inset-bottom,0px))}
+.viewer[hidden]{display:none}
+.viewer video{display:block;max-width:100%;max-height:100%;aspect-ratio:9/16;background:#000;border-radius:12px}
+.viewer .x{position:absolute;top:calc(10px + env(safe-area-inset-top,0px));right:max(12px,env(safe-area-inset-right,0px));width:44px;height:44px;border-radius:50%;border:1px solid var(--line);background:var(--panel);color:var(--fg);font-size:20px;line-height:1;cursor:pointer}
+.viewer.doc{padding:0;background:var(--bg);justify-content:flex-start}
+.viewer.doc .bar{width:100%;display:flex;align-items:center;justify-content:space-between;gap:10px;padding:calc(8px + env(safe-area-inset-top,0px)) 12px 8px;background:var(--panel);border-bottom:1px solid var(--line)}
+.viewer.doc .bar b{font:700 20px var(--display)}
+.viewer.doc .x{position:static}
+.viewer.doc iframe{flex:1;width:100%;border:0;background:var(--bg)}
+.linkbtn{background:none;border:0;padding:6px 0;color:var(--accent,#ff7a3d);font:inherit;font-size:14px;text-decoration:underline;cursor:pointer;justify-self:center}
 .card{width:100%;max-width:560px;background:var(--panel);border-radius:16px 16px 0 0;padding:16px max(16px,env(safe-area-inset-left,0px)) calc(18px + env(safe-area-inset-bottom,0px));display:grid;gap:12px;max-height:88vh;overflow-y:auto}
 .card h2{margin:0;font:700 24px var(--display)}
 .types{display:flex;gap:6px;flex-wrap:wrap}
@@ -345,6 +355,8 @@ a.btn{text-decoration:none;display:inline-block;color:inherit}
       <div class="clublogo" role="img" aria-label="Hog Creek Hunting Club" style="width:min(180px,50vw);margin-top:6px"></div>
       <div class="fact"><span class="k">Signed in as</span><span class="v" id="whoami">Not signed in</span></div>
       <div class="row"><button class="btn" id="btnSignOut">Sign out of this phone</button></div>
+      <div class="sec">Help</div>
+      <div class="row"><button class="btn" id="btnGuide">Field guide</button><button class="btn" id="btnIntro">Watch the intro</button></div>
       <label class="f">Club sheet link<input id="setUrl" placeholder="Apps Script /exec link (only if not built in)"></label>
       <div class="row">
         <label class="f" style="flex:1">Rut starts<input id="setRutA" type="date"></label>
@@ -379,7 +391,26 @@ a.btn{text-decoration:none;display:inline-block;color:inherit}
     <label class="f" id="signUrlWrap" hidden>Club sheet link<input id="signUrl" placeholder="https://script.google.com/macros/s/…/exec"></label>
     <div class="status" id="signMsg"></div>
     <button class="btn primary" type="submit" id="signBtn">Sign in</button>
+    <button class="linkbtn" type="button" id="signIntro">New here? Watch the 45-second intro</button>
   </form>
+</div>
+
+<div class="viewer" id="vidView" hidden role="dialog" aria-label="Intro video">
+  <button class="x" id="vidClose" aria-label="Close">✕</button>
+  <video id="vidEl" controls playsinline preload="none"></video>
+</div>
+<div class="viewer doc" id="guideView" hidden role="dialog" aria-label="Field guide">
+  <div class="bar"><b>Field guide</b><button class="x" id="guideClose" aria-label="Close">✕</button></div>
+  <iframe id="guideFrame" title="Hog Creek field guide"></iframe>
+</div>
+<div class="modal" id="welcomeModal" hidden>
+  <div class="card">
+    <div class="clublogo" role="img" aria-label="Hog Creek Hunting Club" style="width:min(180px,50vw)"></div>
+    <h2>Welcome to Hog Creek</h2>
+    <p class="note" style="margin:0">Watch the intro or read the field guide.</p>
+    <div class="row"><button class="btn primary" id="welVid">Watch the intro</button><button class="btn" id="welGuide">Read the field guide</button></div>
+    <button class="btn" id="welLater">Not now</button>
+  </div>
 </div>
 
 <div class="modal" id="checkModal" hidden>
@@ -1263,10 +1294,38 @@ document.getElementById("signForm").onsubmit=async e=>{
   if(!cfg.url){msg.textContent="The club sheet link is missing.";return}
   msg.textContent="Checking…"; document.getElementById("signBtn").disabled=true;
   const old=cfg.code; cfg.code=code;
-  try{ const j=await api("GET"); S.set("cfg",cfg); applyServer(j); document.getElementById("signModal").hidden=true; toast(`Welcome, ${ME.name}`); renderAll(); }
+  try{ const j=await api("GET"); S.set("cfg",cfg); applyServer(j); document.getElementById("signModal").hidden=true; toast(`Welcome, ${ME.name}`); renderAll(); maybeWelcome(); }
   catch(err){ cfg.code=old; msg.textContent=String(err.message).includes("bad code")?"That code isn't on the club list.":"Couldn't reach the club sheet. Check your signal and try again."; }
   document.getElementById("signBtn").disabled=false;
 };
+/* ---------- intro video + field guide ---------- */
+const INTRO_URL="intro.mp4", GUIDE_URL="guide.html", MEDIA_CACHE="hc-media-v1";
+function cacheIntro(){ // keep the video on the phone only after someone has played it once
+  try{ if(!("caches" in window)) return;
+    caches.open(MEDIA_CACHE).then(c=>c.match(INTRO_URL).then(h=>h||c.add(INTRO_URL))).catch(()=>{});
+  }catch(e){}
+}
+function openIntro(){
+  const v=$$("vidEl"); $$("vidView").hidden=false;
+  if(!v.getAttribute("src")) v.src=INTRO_URL;
+  v.currentTime=0; const p=v.play(); if(p&&p.catch) p.catch(()=>{});
+}
+function closeIntro(){ const v=$$("vidEl"); v.pause(); $$("vidView").hidden=true }
+function openGuide(){ const f=$$("guideFrame"); if(!f.getAttribute("src")) f.src=GUIDE_URL; $$("guideView").hidden=false }
+function closeGuide(){ $$("guideView").hidden=true }
+$$("vidEl").addEventListener("playing",cacheIntro);
+$$("vidClose").onclick=closeIntro;
+$$("vidView").onclick=e=>{ if(e.target===e.currentTarget) closeIntro() };
+$$("guideClose").onclick=closeGuide;
+document.addEventListener("keydown",e=>{ if(e.key!=="Escape") return; if(!$$("vidView").hidden) closeIntro(); else if(!$$("guideView").hidden) closeGuide() });
+$$("signIntro").onclick=openIntro;
+$$("btnIntro").onclick=openIntro;
+$$("btnGuide").onclick=openGuide;
+function maybeWelcome(){ if(ME&&!S.get("welcomed",false)) $$("welcomeModal").hidden=false }
+const welDone=()=>{ S.set("welcomed",true); $$("welcomeModal").hidden=true };
+$$("welVid").onclick=()=>{ welDone(); openIntro() };
+$$("welGuide").onclick=()=>{ welDone(); openGuide() };
+$$("welLater").onclick=welDone;
 document.getElementById("btnSignOut").onclick=()=>{const b=document.getElementById("btnSignOut"); if(b.dataset.sure){signOut(false);b.dataset.sure="";b.textContent="Sign out of this phone"} else {b.dataset.sure=1;b.textContent="Tap again to sign out"}};
 function addPin(p){
   p._pending=true; PINS.push(p); S.set("pins",PINS);
@@ -2732,6 +2791,7 @@ buildLease(true);
 renderAll();
 loadWeather();
 if(cfg.code) sync(); else openSignIn();
+if(cfg.code) maybeWelcome();
 resetSyncTimer();
 renderShare(); if(shareOn&&cfg.code){ if(Date.now()-shareStart>SHARE_HOURS*3600e3) setShare(false); else { startGps(); } }
 if(autoShare&&cfg.code) startGpsQuiet();
