@@ -223,10 +223,6 @@ input[type=range]{padding:0;accent-color:var(--accent)}
 .conebar input{width:100%}
 .snap{display:grid;gap:6px;padding:10px 12px;border:1px solid var(--good);border-radius:10px;background:#1b2a1d}
 .snap .row .btn{padding:6px 16px}
-.gcban{display:grid;gap:6px;padding:10px 12px;border:1px solid var(--ok);border-radius:10px;background:#3a3214;color:#fff2c4}
-.gcban a{color:#ffd34d;font-weight:600}
-.gcban .m{font:12px var(--mono);color:#e9d9a0}
-.gcban.late{border-color:var(--bad);background:#3d1a16}
 .sg-ar{width:22px;height:22px;pointer-events:none}.sg-ar svg{display:block}
 .sg-h{width:30px;height:30px;border-radius:50%;background:rgba(255,255,255,.25);border:2px dashed #fff}
 .hint{font:12px var(--body);color:var(--muted);margin-top:-4px}
@@ -297,7 +293,6 @@ input[type=range]{padding:0;accent-color:var(--accent)}
     </section>
 
     <section class="pane" id="p-log">
-      <div id="gcBanner" style="display:grid;gap:8px"></div>
       <div class="row"><button class="btn primary" id="btnLogSit">Log a sit</button><button class="btn" id="btnAddSight">Log a sighting</button><button class="btn" id="btnAddHarvest">Add a harvest</button></div>
       <div class="sec">Stands by the numbers</div>
       <div class="plist" id="standStats"></div>
@@ -495,10 +490,7 @@ input[type=range]{padding:0;accent-color:var(--accent)}
     </div>
     <div class="snap" id="harvSnap" hidden></div>
     <label class="f">Stand<select id="harvStand"></select></label>
-    <div class="row" style="flex-wrap:nowrap;align-items:end">
-      <label class="f" style="flex:1">Game Check #<input id="harvGC" maxlength="40" autocapitalize="characters" spellcheck="false" placeholder="Confirmation number"></label>
-      <label class="sharebox" style="flex:none;padding:9px 12px"><input type="checkbox" id="harvRep"><span><b>Reported</b></span></label>
-    </div>
+
     <label class="f">Notes<textarea id="harvNotes" rows="2" placeholder="Shot at 7:52, 60 yd, ran 40 yd…"></textarea></label>
     <label class="f">Photo<input id="harvPhoto" type="file" accept="image/*"></label>
     <img id="harvPrev" alt="" style="max-width:100%;border-radius:10px" hidden>
@@ -1512,7 +1504,7 @@ function chips(el,items,cur,onPick){
 const localISO=(date,hm)=>new Date(`${date}T${hm||"00:00"}`).toISOString();
 const hm=d=>{const x=new Date(d);return String(x.getHours()).padStart(2,"0")+":"+String(x.getMinutes()).padStart(2,"0")};
 const ymd=d=>dayKey(new Date(d));
-function renderClubData(){renderRes();renderLog();renderTasks();renderTaskLayer();renderHarvLayer();renderTrails();renderRoads();renderSightings();renderGC()}
+function renderClubData(){renderRes();renderLog();renderTasks();renderTaskLayer();renderHarvLayer();renderTrails();renderRoads();renderSightings()}
 
 /* ---------- legal light ---------- */
 function renderLight(){
@@ -2053,9 +2045,8 @@ function renderLog(){
   HARV.slice().sort((a,b)=>String(b.date).localeCompare(String(a.date))).slice(0,40).forEach(h=>{
     const el=document.createElement("div");el.className="prow";el.style.gridTemplateColumns="30px 1fr";
     const src=h._photo||(h.photoId?`https://drive.google.com/thumbnail?id=${encodeURIComponent(h.photoId)}&sz=w800`:"");
-    el.innerHTML=`<div class="harv-ic">${esc((h.species||"?")[0])}</div><div style="min-width:0"><div class="t">${esc(h.name)} · ${esc(h.species)}${h.sex?" "+esc(h.sex):""}${h.points?` · ${esc(h.points)} pt`:""}${h.weight?` · ${esc(h.weight)} lb`:""}</div><div class="m">${esc(h.date)}${h.time?" "+esc(fmtHM(h.time)):""}${h.stand?" · "+esc(h.stand):""}${h._pending?" · waiting for signal":""}</div>${h.reported===true?`<div class="m" style="color:var(--good)">✓ Reported to Game Check${h.gameCheck?" · #"+esc(h.gameCheck):""}</div>`:""}${h.notes?`<div style="font-size:13px">${esc(h.notes)}</div>`:""}${needsGC(h)?gcHtml(h):""}${src?`<img class="thumb" src="${src}" alt="Harvest photo" loading="lazy">`:""}<div class="mini"></div></div>`;
+    el.innerHTML=`<div class="harv-ic">${esc((h.species||"?")[0])}</div><div style="min-width:0"><div class="t">${esc(h.name)} · ${esc(h.species)}${h.sex?" "+esc(h.sex):""}${h.points?` · ${esc(h.points)} pt`:""}${h.weight?` · ${esc(h.weight)} lb`:""}</div><div class="m">${esc(h.date)}${h.time?" "+esc(fmtHM(h.time)):""}${h.stand?" · "+esc(h.stand):""}${h._pending?" · waiting for signal":""}</div>${h.notes?`<div style="font-size:13px">${esc(h.notes)}</div>`:""}${src?`<img class="thumb" src="${src}" alt="Harvest photo" loading="lazy">`:""}<div class="mini"></div></div>`;
     if(canEdit(h)){const b=document.createElement("button");b.className="btn";b.textContent="Edit";b.onclick=()=>openHarvest(h);el.querySelector(".mini").appendChild(b)}
-    if(canEdit(h)&&needsGC(h)){const b=document.createElement("button");b.className="btn primary";b.textContent="I reported it";b.onclick=()=>openHarvest(h,true);el.querySelector(".mini").appendChild(b)}
     if(canEdit(h)){const x=document.createElement("button");x.className="btn danger";x.textContent="Delete";x.onclick=()=>{if(x.dataset.sure){HARV=HARV.filter(v=>v.id!==h.id);enqueue({action:"deleteHarvest",id:h.id})}else{x.dataset.sure=1;x.textContent="Tap again to delete"}};el.querySelector(".mini").appendChild(x)}
     hl.appendChild(el)});
   if(!HARV.length) hl.innerHTML='<div class="note">No harvests logged yet.</div>';
@@ -2073,7 +2064,7 @@ function renderLog(){
 let hSpecies="Deer", hSex="Buck", hPhoto=null;
 const SEXES={Deer:["Buck","Doe"],Turkey:["Gobbler","Jake","Hen"],Hog:["Boar","Sow"],Duck:["Drake","Hen"],Other:["—"]};
 let hEdit=null;
-function openHarvest(edit,focusGC){
+function openHarvest(edit){
   if(!ME){openSignIn();return}
   hEdit=edit&&edit.id?edit:null; const h=hEdit;
   hSpecies=h?.species||"Deer"; if(!SEXES[hSpecies]) hSpecies="Other"; hSex=h?(h.sex||SEXES[hSpecies][0]):"Buck"; hPhoto=null;
@@ -2082,7 +2073,7 @@ function openHarvest(edit,focusGC){
   $$("harvPtsHint").hidden=hSpecies!=="Deer";
   $$("harvTitle").textContent=h?"Edit harvest":"Add a harvest"; $$("harvSave").textContent=h?"Save changes":"Save harvest";
   $$("harvPts").value=h?.points??""; $$("harvWt").value=h?.weight??""; $$("harvDate").value=h?String(h.date||""):dayKey(new Date()); $$("harvTime").value=h?(h.time||""):hm(new Date());
-  $$("harvNotes").value=h?.notes||""; $$("harvPhoto").value=""; $$("harvMsg").textContent=""; $$("harvGC").value=h?.gameCheck||""; $$("harvRep").checked=h?.reported===true;
+  $$("harvNotes").value=h?.notes||""; $$("harvPhoto").value=""; $$("harvMsg").textContent="";
   const src=h&&(h._photo||(h.photoId?`https://drive.google.com/thumbnail?id=${encodeURIComponent(h.photoId)}&sz=w800`:""));
   $$("harvPrev").hidden=!src; if(src) $$("harvPrev").src=src;
   const sel=$$("harvStand");
@@ -2090,7 +2081,6 @@ function openHarvest(edit,focusGC){
   else { const cur=CHECKINS.find(c=>c.name===ME.name)?.stand, nr=cur?null:nearStand(me);
     fillSpots(sel,cur||(nr&&nr.s.id)); snapAsk($$("harvSnap"),nr,true,v=>{sel.value=v?nr.s.id:(me?"gps":sel.options[0]?.value)}) }
   showModal("harvModal");
-  if(focusGC) setTimeout(()=>{$$("harvRep").checked=true;$$("harvGC").focus();$$("harvGC").scrollIntoView({block:"center"})},50);
 }
 $$("btnAddHarvest").onclick=openHarvest;
 $$("harvPhoto").onchange=async e=>{
@@ -2105,53 +2095,30 @@ $$("harvPhoto").onchange=async e=>{
 $$("harvForm").onsubmit=e=>{
   e.preventDefault(); const sp=pickedSpot($$("harvStand"));
   const f={date:$$("harvDate").value,time:$$("harvTime").value,species:hSpecies,sex:hSex==="—"?"":hSex,points:$$("harvPts").value,weight:$$("harvWt").value,
-    notes:$$("harvNotes").value.trim(),gameCheck:$$("harvGC").value.trim().slice(0,40),reported:$$("harvRep").checked};
-  if(f.gameCheck&&!f.reported) f.reported=true;   // a confirmation number means it was reported
+    notes:$$("harvNotes").value.trim()};
   if(hEdit){
     const h=hEdit; if(sp&&sp.stand!=="keep") Object.assign(f,{stand:sp.label,lat:+sp.ll[0],lon:+sp.ll[1]});
     Object.assign(h,f); if(hPhoto) h._photo=hPhoto;
     const q=h._pending&&QUEUE.find(x=>x.action==="addHarvest"&&x.id===h.id);
     if(q){Object.assign(q,f); if(hPhoto) q.photo=hPhoto.split(",")[1]; S.set("queue",QUEUE); saveData(); renderClubData()}
     else enqueue(Object.assign({action:"updateHarvest",id:h.id},f,hPhoto?{photo:hPhoto.split(",")[1]}:{}));
-    hEdit=null; hideModal("harvModal"); toast(f.reported?"Harvest saved. Reported ✓":"Harvest updated"); return;
+    hEdit=null; hideModal("harvModal"); toast("Harvest updated"); return;
   }
   const h=Object.assign({id:uid(),name:ME.name,stand:sp?sp.label:"",lat:sp?+sp.ll[0]:(me?me[0]:""),lon:sp?+sp.ll[1]:(me?me[1]:""),_photo:hPhoto,_pending:true},f);
   HARV.unshift(h); hideModal("harvModal");
   const {_photo,_pending,...send}=h; enqueue(Object.assign({action:"addHarvest",photo:hPhoto?hPhoto.split(",")[1]:""},send));
-  if(needsGC(h)){ selectTab("log"); collapse(false); document.querySelector(".body").scrollTop=0; toast(`Congrats! Report it to Georgia Game Check within ${GC_HOURS} hours.`) } else toast("Harvest logged. Congrats!");
+  toast("Harvest logged. Congrats!");
 };
 function renderHarvLayer(){
   harvLayer.clearLayers();
   HARV.filter(h=>h.lat!==""&&h.lat!=null&&isFinite(+h.lat)).forEach(h=>{
     const src=h._photo||(h.photoId?`https://drive.google.com/thumbnail?id=${encodeURIComponent(h.photoId)}&sz=w400`:"");
     L.marker([+h.lat,+h.lon],{icon:L.divIcon({className:"lbl",html:`<div class="harv-ic">${esc((h.species||"?")[0])}</div>`,iconSize:[24,24],iconAnchor:[12,12]})})
-     .bindPopup(`<h4>${esc(h.species)} ${esc(h.sex||"")}</h4><div>${esc(h.name)} · ${esc(h.date)}${h.points?` · ${esc(h.points)} pt`:""}</div>${needsGC(h)?gcHtml(h):""}${src?`<img class="thumb" src="${src}" alt="">`:""}`).addTo(harvLayer);
+     .bindPopup(`<h4>${esc(h.species)} ${esc(h.sex||"")}</h4><div>${esc(h.name)} · ${esc(h.date)}${h.points?` · ${esc(h.points)} pt`:""}</div>${src?`<img class="thumb" src="${src}" alt="">`:""}`).addTo(harvLayer);
   });
 }
 
-/* ---------- Georgia Game Check reminder ---------- */
-// GA DNR (georgiawildlife.com/HarvestRecordGeorgiaGameCheck, checked Nov 25 2026) says deer and turkey must be reported within 24 hours.
-const GC_HOURS=24, GC_URL="https://gooutdoorsgeorgia.com/", GC_INFO="https://georgiawildlife.com/HarvestRecordGeorgiaGameCheck", GC_TEL="18003662661";
 const fmtHM=t=>{const m=/^(\d\d):(\d\d)/.exec(t||"");if(!m)return t||"";const h=+m[1];return `${h%12||12}:${m[2]} ${h<12?"AM":"PM"}`};
-const harvAt=h=>new Date(`${h.date}T${/^\d\d:\d\d/.test(h.time||"")?h.time:"12:00"}`);
-// deer and turkey only; older than 30 days is past nagging
-const needsGC=h=>h&&h.reported!==true&&["Deer","Turkey"].includes(h.species)&&/^\d{4}-\d\d-\d\d/.test(String(h.date||""))&&Date.now()-harvAt(h)<30*864e5;
-function gcHtml(h){
-  const due=new Date(+harvAt(h)+GC_HOURS*3600e3), left=(due-Date.now())/3600e3, late=left<0;
-  return `<div class="gcban${late?" late":""}"><div><b>Report to Georgia Game Check within ${GC_HOURS} hours</b></div>
-    <div class="m">${late?`Overdue since ${fmtD(due)} ${fmtT(due)}. Report it now.`:`Due ${fmtD(due)} ${fmtT(due)} · ${left<1?Math.max(1,Math.round(left*60))+" min":Math.floor(left)+" h"} left`}</div>
-    <div><a href="${GC_URL}" target="_blank" rel="noopener">Outdoors GA app / site</a> · <a href="tel:${GC_TEL}">Call 1-800-366-2661</a> · <a href="${GC_INFO}" target="_blank" rel="noopener">How it works</a></div>
-    <div class="m">Then add the confirmation # and check Reported on the harvest.</div></div>`;
-}
-function renderGC(){
-  const box=$$("gcBanner"); if(!box) return; box.innerHTML="";
-  HARV.filter(h=>ME&&h.name===ME.name&&needsGC(h)).forEach(h=>{
-    const w=document.createElement("div"); w.innerHTML=gcHtml(h); const ban=w.firstElementChild;
-    ban.insertAdjacentHTML("afterbegin",`<div class="m">Your ${esc(h.species.toLowerCase())}${h.sex?" ("+esc(h.sex.toLowerCase())+")":""}, ${esc(h.date)}</div>`);
-    const b=document.createElement("button"); b.className="btn primary"; b.style.justifySelf="start"; b.textContent="I reported it"; b.onclick=()=>openHarvest(h,true); ban.appendChild(b);
-    box.appendChild(ban);
-  });
-}
 
 /* ---------- snap logs to the nearest stand (within 40 yd) ---------- */
 const SNAP_M=40/1.0936;
