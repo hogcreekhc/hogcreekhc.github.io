@@ -1299,6 +1299,7 @@ document.getElementById("signForm").onsubmit=async e=>{
   document.getElementById("signBtn").disabled=false;
 };
 /* ---------- intro video + field guide ---------- */
+const vg=id=>document.getElementById(id);   // $$ is defined further down
 const INTRO_URL="intro.mp4", GUIDE_URL="guide.html", MEDIA_CACHE="hc-media-v1";
 function cacheIntro(){ // keep the video on the phone only after someone has played it once
   try{ if(!("caches" in window)) return;
@@ -1306,26 +1307,26 @@ function cacheIntro(){ // keep the video on the phone only after someone has pla
   }catch(e){}
 }
 function openIntro(){
-  const v=$$("vidEl"); $$("vidView").hidden=false;
+  const v=vg("vidEl"); vg("vidView").hidden=false;
   if(!v.getAttribute("src")) v.src=INTRO_URL;
   v.currentTime=0; const p=v.play(); if(p&&p.catch) p.catch(()=>{});
 }
-function closeIntro(){ const v=$$("vidEl"); v.pause(); $$("vidView").hidden=true }
-function openGuide(){ const f=$$("guideFrame"); if(!f.getAttribute("src")) f.src=GUIDE_URL; $$("guideView").hidden=false }
-function closeGuide(){ $$("guideView").hidden=true }
-$$("vidEl").addEventListener("playing",cacheIntro);
-$$("vidClose").onclick=closeIntro;
-$$("vidView").onclick=e=>{ if(e.target===e.currentTarget) closeIntro() };
-$$("guideClose").onclick=closeGuide;
-document.addEventListener("keydown",e=>{ if(e.key!=="Escape") return; if(!$$("vidView").hidden) closeIntro(); else if(!$$("guideView").hidden) closeGuide() });
-$$("signIntro").onclick=openIntro;
-$$("btnIntro").onclick=openIntro;
-$$("btnGuide").onclick=openGuide;
-function maybeWelcome(){ if(ME&&!S.get("welcomed",false)) $$("welcomeModal").hidden=false }
-const welDone=()=>{ S.set("welcomed",true); $$("welcomeModal").hidden=true };
-$$("welVid").onclick=()=>{ welDone(); openIntro() };
-$$("welGuide").onclick=()=>{ welDone(); openGuide() };
-$$("welLater").onclick=welDone;
+function closeIntro(){ const v=vg("vidEl"); v.pause(); vg("vidView").hidden=true }
+function openGuide(){ const f=vg("guideFrame"); if(!f.getAttribute("src")) f.src=GUIDE_URL; vg("guideView").hidden=false }
+function closeGuide(){ vg("guideView").hidden=true }
+vg("vidEl").addEventListener("playing",cacheIntro);
+vg("vidClose").onclick=closeIntro;
+vg("vidView").onclick=e=>{ if(e.target===e.currentTarget) closeIntro() };
+vg("guideClose").onclick=closeGuide;
+document.addEventListener("keydown",e=>{ if(e.key!=="Escape") return; if(!vg("vidView").hidden) closeIntro(); else if(!vg("guideView").hidden) closeGuide() });
+vg("signIntro").onclick=openIntro;
+vg("btnIntro").onclick=openIntro;
+vg("btnGuide").onclick=openGuide;
+function maybeWelcome(){ if(ME&&!S.get("welcomed",false)) vg("welcomeModal").hidden=false }
+const welDone=()=>{ S.set("welcomed",true); vg("welcomeModal").hidden=true };
+vg("welVid").onclick=()=>{ welDone(); openIntro() };
+vg("welGuide").onclick=()=>{ welDone(); openGuide() };
+vg("welLater").onclick=welDone;
 document.getElementById("btnSignOut").onclick=()=>{const b=document.getElementById("btnSignOut"); if(b.dataset.sure){signOut(false);b.dataset.sure="";b.textContent="Sign out of this phone"} else {b.dataset.sure=1;b.textContent="Tap again to sign out"}};
 function addPin(p){
   p._pending=true; PINS.push(p); S.set("pins",PINS);
