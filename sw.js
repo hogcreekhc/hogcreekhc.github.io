@@ -1,5 +1,5 @@
 // Hog Creek Lease offline helper: keeps the app and saved map tiles on the phone.
-const SHELL = 'hc-shell-v21', TILES = 'hc-tiles-v1';
+const SHELL = 'hc-shell-v22', TILES = 'hc-tiles-v1';
 const SHELL_FILES = ['./', './index.html', './manifest.json',
   './icons/logo.svg', './icons/apple-touch-icon.png', './icons/favicon-32.png', './icons/icon-192.png', './icons/icon-512.png', './icons/icon-maskable-512.png',
   'https://cdn.jsdelivr.net/npm/leaflet-rotate@0.2.8/dist/leaflet-rotate-src.js',
@@ -19,7 +19,7 @@ self.addEventListener('fetch', e => {
   const req = e.request, u = req.url;
   if (req.method !== 'GET') return;
   if (/script\.google|googleusercontent|open-meteo/.test(u)) return;          // always live
-  if (/arcgisonline\.com|nationalmap\.gov/.test(u)) {                          // map tiles: saved copy first
+  if (/arcgisonline\.com|maptiles\.arcgis\.com|nationalmap\.gov/.test(u)) {    // map tiles (incl. Esri Clarity): saved copy first
     e.respondWith((async () => {
       const c = await caches.open(TILES), k = tileKey(u);
       const hit = await c.match(k);

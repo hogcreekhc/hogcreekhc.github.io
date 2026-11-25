@@ -221,6 +221,7 @@ label.f{display:grid;gap:4px;font:500 12px var(--mono);color:var(--muted);text-t
 input[type=range]{padding:0;accent-color:var(--accent)}
 .conebar{margin:2px 0 10px;min-width:0;max-width:100%}.conebar .ct{display:flex;align-items:center;justify-content:space-between;gap:8px;font-size:14px;margin-bottom:2px}
 .conebar input{width:100%}
+a.btn{text-decoration:none;display:inline-block;color:inherit}
 .snap{display:grid;gap:6px;padding:10px 12px;border:1px solid var(--good);border-radius:10px;background:#1b2a1d}
 .snap .row .btn{padding:6px 16px}
 .sg-ar{width:22px;height:22px;pointer-events:none}.sg-ar svg{display:block}
@@ -331,7 +332,7 @@ input[type=range]{padding:0;accent-color:var(--accent)}
       <div class="filters" id="sightFiltMap"></div>
       <div class="sec">Tools</div>
       <div class="row"><button class="btn" id="btnMeasure">Measure distance / area</button><button class="btn" id="btnBlood">Start a blood trail</button></div>
-      <div class="row"><button class="btn" id="btnFit">Zoom to property</button><button class="btn" id="btnTrack">Start a track</button></div>
+      <div class="row"><button class="btn" id="btnFit">Zoom to property</button><button class="btn" id="btnPhoneMaps">Open map center in Maps</button><button class="btn" id="btnTrack">Start a track</button></div>
       <div class="row"><button class="btn" id="btnTrailDraw">Draw a deer trail</button><button class="btn" id="btnRoadDraw">Draw a road</button></div>
       <div class="row"><button class="btn" id="btnSightMap">Log a deer sighting</button></div>
       <p class="note">To map a deer trail or a road by walking or driving it, use Start a track, then choose "Save as deer trail" or "Save as road" when you stop.</p>
@@ -729,13 +730,19 @@ const WMS=l=>`https://elevation.nationalmap.gov/arcgis/services/3DEPElevation/Im
 const ExportTiles=L.TileLayer.extend({getTileUrl(c){const W=40075016.68557849,n=2**c.z,x0=-W/2+c.x*W/n,y1=W/2-c.y*W/n;return `${this._url}&bbox=${x0},${y1-W/n},${x0+W/n},${y1}`}});
 const IMG="https://elevation.nationalmap.gov/arcgis/rest/services/3DEPElevation/ImageServer/exportImage?bboxSR=3857&imageSR=3857&size=256,256&format=png&f=image&renderingRule=";
 const bases={
-  "Aerial":L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",{maxNativeZoom:18,maxZoom:20,attribution:"Imagery © Esri"}),
+  // "Aerial" = Esri Clarity: the sharpest free imagery over the lease, but undated (likely older)
+  "Aerial":L.tileLayer("https://clarity.maptiles.arcgis.com/arcgis/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",{maxNativeZoom:19,maxZoom:20,attribution:"Imagery © Esri (Clarity)"}),
+  // Esri World Imagery: Vantor WorldView-2, 0.5 m, captured Sept 16 2025 over the lease; real tiles to zoom 19
+  "Aerial (newest)":L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",{maxNativeZoom:19,maxZoom:20,attribution:"Imagery © Esri, Vantor"}),
   "Topo":L.tileLayer("https://basemap.nationalmap.gov/arcgis/rest/services/USGSTopo/MapServer/tile/{z}/{y}/{x}",{maxNativeZoom:16,maxZoom:20,attribution:"USGS"}),
   "LiDAR terrain":null
 };
 bases["LiDAR terrain"]=new WMSTiles(WMS("3DEPElevation:Hillshade Multidirectional"),{maxZoom:20,maxNativeZoom:17,attribution:"USGS 3DEP"});
 let baseName=S.get("base","Aerial"); if(!bases[baseName]) baseName="Aerial";
 bases[baseName].addTo(map);
+const BASE_LABEL={"Aerial":"Aerial (sharpest)","Aerial (newest)":"Aerial (newest · Sept 2025)"};
+// a spot Clarity doesn't cover falls back to the newest imagery for that tile
+bases["Aerial"].on("tileerror",e=>{if(e.tile._fb) return; e.tile._fb=1; e.tile.src=bases["Aerial (newest)"].getTileUrl(e.coords)});
 
 const ov={};
 ov["Elevation (high / low)"]=new ExportTiles(IMG+encodeURIComponent(RR_ELEV),{opacity:.5,maxZoom:20,maxNativeZoom:17,zIndex:2,attribution:"USGS 3DEP"});
@@ -1023,6 +1030,16 @@ function drawCones(){
   // pins have no "good winds" saved, so their cones are white
   if(map.hasLayer(pinLayer)&&pinFilter.has("stand")) PINS.filter(p=>!p.deleted&&p.type==="stand"&&standShown("pin:"+p.id)).forEach(p=>cone([+p.lat,+p.lon],"#ffffff"));
 }
+/* ---------- open a spot in the phone's own maps app: Apple Maps on iPhone, Google Maps on Android, both elsewhere ---------- */
+const IOS=/iPhone|iPad|iPod/.test(navigator.userAgent)||(navigator.platform==="MacIntel"&&navigator.maxTouchPoints>1), ANDROID=/Android/i.test(navigator.userAgent);
+function mapsUrls(ll,label){const la=(+ll[0]).toFixed(6),lo=(+ll[1]).toFixed(6);
+  return {apple:`https://maps.apple.com/?ll=${la},${lo}&q=${encodeURIComponent(label||"Hog Creek spot")}&t=k&z=19`,
+          google:`https://www.google.com/maps/@?api=1&map_action=map&center=${la},${lo}&zoom=19&basemap=satellite`}}
+function mapsBtns(el,ll,label,style){
+  const u=mapsUrls(ll,label), add=(txt,href)=>{const a=document.createElement("a");a.className="btn";a.href=href;a.target="_blank";a.rel="noopener";a.textContent=txt;if(style)a.style.cssText=style;el.appendChild(a)};
+  if(!ANDROID) add(IOS?"Open in Maps":"Apple Maps",u.apple);
+  if(!IOS) add(ANDROID?"Open in Google Maps":"Google Maps",u.google);
+}
 const sLbl=id=>/^\d+$/.test(String(id))?"#"+id:String(id);
 function standPopup(s){
   let html=`<h4>${esc(sLbl(s.id))} · ${esc(s.name)}</h4><div><b>${esc(s.type||"Stand")}</b> · ${s.kids?'<span class="g">Kids OK</span>':'<span class="pop-m">Not for kids</span>'}${s.facing!=null&&isFinite(s.facing)?` · faces ${card(+s.facing)}`:""}</div>${s.note?`<div style="margin-top:3px;color:var(--ok)">${esc(s.note)}</div>`:""}${s.why?`<div style="margin-top:4px">${esc(s.why)}</div>`:""}${s.walk?`<div class="pop-m" style="margin-top:4px">Walk in: ${esc(s.walk)}</div>`:""}${Array.isArray(s.route)&&s.route.length>1?`<div class="pop-m" style="color:#7df9ff">Walk-in route: ${yd(lineLen(s.route))} yd. Guide me follows it.</div>`:""}`;
@@ -1048,6 +1065,7 @@ function withHuntButton(html,spot){
   const row=document.createElement("div"); row.className="mini"; row.style.marginTop="8px"; d.appendChild(row);
   if(ME){const b=document.createElement("button");b.className="btn primary";b.textContent="I'm hunting here";b.onclick=()=>{checkIn(spot);map.closePopup()};row.appendChild(b)}
   {const g=document.createElement("button");g.className="btn";g.textContent="Guide me";g.onclick=()=>{map.closePopup();const st=(LEASE?.stands||[]).find(x=>x.id===spot.stand);guideTo(spot.label,spot.ll,st?.route)};row.appendChild(g)}
+  mapsBtns(row,spot.ll,spot.label);
   if(ME&&!String(spot.stand).startsWith("gps")){const r=document.createElement("button");r.className="btn";r.textContent="Reserve";r.onclick=()=>{map.closePopup();openReserve(spot.stand)};row.appendChild(r)}
   return d;
 }
@@ -1152,6 +1170,7 @@ function renderPins(){
       const d=document.createElement("div");
       d.innerHTML=`<h4>${esc(t.name)}</h4>${p.note?`<div>${esc(p.note)}</div>`:""}${p.type==="plot"&&(p.acres!==""&&p.acres!=null||p.plant)?`<div style="margin-top:3px">${p.acres!==""&&p.acres!=null?`<b>${esc(fmtAc(+p.acres))} ac</b>`:""}${p.plant?`${p.acres!==""&&p.acres!=null?" · ":""}Plant: ${esc(p.plant)}`:""}</div>`:""}${p.type==="feeder"&&!/Weyerhaeuser/i.test(p.note||"")?`<div style="margin-top:3px;color:var(--ok)">Needs Weyerhaeuser written OK. No turkey hunting near bait.</div>`:""}<div class="pop-m">${esc(p.by||"Someone")} · ${new Date(p.t).toLocaleString("en-US",{timeZone:CLUB.TZ,month:"short",day:"numeric",hour:"numeric",minute:"2-digit"})}${p._pending?" · waiting to upload":""}</div><div class="pop-m">${(+p.lat).toFixed(6)}, ${(+p.lon).toFixed(6)}</div>`;
       {const g=document.createElement("button");g.className="btn";g.style.marginTop="8px";g.style.marginRight="6px";g.textContent="Guide me";g.onclick=()=>{map.closePopup();guideTo((p.note||t.name).slice(0,40),[+p.lat,+p.lon])};d.appendChild(g)}
+      mapsBtns(d,[+p.lat,+p.lon],(p.note||t.name).slice(0,40),"margin-top:8px;margin-right:6px");
       if(p.type==="cam"&&ME){const n=CAMS.filter(c=>c.pinId===p.id).length;
         const a=document.createElement("button");a.className="btn primary";a.style.marginTop="8px";a.style.marginRight="6px";a.textContent=`Photos (${n})`;a.onclick=()=>{map.closePopup();openCamGallery(p)};d.appendChild(a);
         const b=document.createElement("button");b.className="btn";b.style.marginTop="8px";b.style.marginRight="6px";b.textContent="Add photos";b.onclick=()=>{map.closePopup();openCamAdd(p)};d.appendChild(b)}
@@ -1424,14 +1443,16 @@ function renderStandList(){
 }
 function renderLayers(){
   const bl=document.getElementById("baseLayers"); bl.innerHTML="";
-  Object.keys(bases).forEach(n=>{const l=document.createElement("label");l.innerHTML=`<span>${n}</span><input type="checkbox" class="sw" role="switch" ${n===baseName?"checked":""}>`;l.querySelector("input").onchange=e=>{
+  Object.keys(bases).forEach(n=>{const l=document.createElement("label");l.innerHTML=`<span>${BASE_LABEL[n]||n}</span><input type="checkbox" class="sw" role="switch" ${n===baseName?"checked":""}>`;l.querySelector("input").onchange=e=>{
     if(!e.target.checked){ // a base map has to be showing; switching the current one off goes back to Aerial
-      if(n==="Aerial"){e.target.checked=true;toast("Switch on Topo or LiDAR terrain to change the base map");return} }
+      if(n==="Aerial"){e.target.checked=true;toast("Switch on another base map to change it");return} }
     const next=e.target.checked?n:"Aerial"; map.removeLayer(bases[baseName]); baseName=next; bases[next].addTo(map); bases[next].bringToBack(); S.set("base",next); renderLayers()};bl.appendChild(l)});
   const ol=document.getElementById("overLayers"); ol.innerHTML="";
   renderStandList();
   Object.keys(ov).filter(n=>n!=="Stands").forEach(n=>{const l=document.createElement("label");l.innerHTML=`<span>${n}</span><input type="checkbox" class="sw" role="switch" ${map.hasLayer(ov[n])?"checked":""}>`;l.querySelector("input").onchange=e=>{e.target.checked?ov[n].addTo(map):map.removeLayer(ov[n]);S.set("ov",Object.keys(ov).filter(k=>map.hasLayer(ov[k])))};ol.appendChild(l)});
 }
+document.getElementById("btnPhoneMaps").textContent=IOS?"Open this spot in Apple Maps":ANDROID?"Open this spot in Google Maps":"Open this spot in Google Maps";
+document.getElementById("btnPhoneMaps").onclick=()=>{const c=map.getCenter(),u=mapsUrls([c.lat,c.lng],"Hog Creek");window.open(IOS?u.apple:u.google,"_blank","noopener")};
 document.getElementById("btnFit").onclick=()=>{collapse(true);setTimeout(fitLease,260)};
 
 
@@ -1463,17 +1484,17 @@ async function saveOffline(){
   if(!("caches" in window)){st.textContent="This browser can't save maps.";return}
   btn.disabled=true;
   const b=leaseBounds().pad(0.15);
-  const layers=[bases["Aerial"],ov["10 ft contours"],ov["Elevation (high / low)"],ov[SLOPE],bases["LiDAR terrain"],bases["Topo"]];
-  const jobs=[]; for(let z=13;z<=18;z++) for(const c of tilesFor(b,z)) for(const l of layers){ const nz=l.options.maxNativeZoom||18; if(z>nz) continue; jobs.push(l.getTileUrl(c)); }
+  const layers=[bases["Aerial"],bases["Aerial (newest)"],ov["10 ft contours"],ov["Elevation (high / low)"],ov[SLOPE],bases["LiDAR terrain"],bases["Topo"]];
+  const jobs=[]; for(let z=13;z<=19;z++) for(const c of tilesFor(b,z)) for(const l of layers){ const nz=l.options.maxNativeZoom||18; if(z>nz) continue; jobs.push(l.getTileUrl(c)); }
   const cache=await caches.open("hc-tiles-v1"); let done=0, fail=0, i=0;
   async function worker(){ while(i<jobs.length){ const u=jobs[i++]; try{ if(!(await cache.match(u))){ const r=await fetch(u,{mode:"cors"}); if(r.ok) await cache.put(u,r); else fail++; } }catch(e){fail++} done++; if(done%10===0||done===jobs.length) st.textContent=`Saving map… ${Math.round(done/jobs.length*100)}%`; } }
   await Promise.all(Array.from({length:8},worker));
-  S.set("offlineAt",Date.now());
+  S.set("offlineAt",Date.now()); S.set("offlineV",2);
   st.textContent=fail?`Saved ${jobs.length-fail} of ${jobs.length} map pieces. Run it again on better signal to get the rest.`:`Lease map saved for offline (${jobs.length} pieces).`;
   btn.disabled=false; btn.textContent="Update saved map";
 }
 document.getElementById("btnOffline").onclick=saveOffline;
-if(S.get("offlineAt",0)){document.getElementById("offlineStatus").textContent="Lease map saved "+new Date(S.get("offlineAt",0)).toLocaleDateString("en-US",{month:"short",day:"numeric"})+".";document.getElementById("btnOffline").textContent="Update saved map"}
+if(S.get("offlineAt",0)){document.getElementById("offlineStatus").textContent=S.get("offlineV",1)<2?"New sharper aerial maps: tap Update saved map on Wi-Fi so they work with no signal.":"Lease map saved "+new Date(S.get("offlineAt",0)).toLocaleDateString("en-US",{month:"short",day:"numeric"})+".";document.getElementById("btnOffline").textContent="Update saved map"}
 
 /* ================= club data: reservations, sits, tasks, harvests ================= */
 let LOCS=S.get("locs",[]);
@@ -2156,6 +2177,7 @@ function sightPopup(x){
   d.innerHTML=`<h4 style="color:${c}">${esc(sightTitle(x))}</h4><div>${esc(x.behavior||"")}${x.bearing!==""&&x.bearing!=null?`${x.behavior?" · ":""}heading ${card(+x.bearing)}`:""}</div>
     <div class="pop-m">${esc(x.date)} ${esc(fmtHM(x.time))}${x.stand?" · from "+esc(standTxt(x.stand)):""}</div>
     <div class="pop-m">${x.windDir!==""&&x.windDir!=null?`Wind ${card(+x.windDir)} ${Math.round(+x.windSp)} mph`:"Wind not known yet"} · ${esc(x.by||"Someone")}${x._pending?" · waiting to upload":""}</div>${x.note?`<div style="margin-top:4px">${esc(x.note)}</div>`:""}`;
+  mapsBtns(d,[+x.lat,+x.lon],sightTitle(x),"margin-top:8px;margin-right:6px");
   if(canEdit(x)){const b=document.createElement("button");b.className="btn danger";b.style.marginTop="8px";b.textContent="Delete sighting";
     b.onclick=()=>{if(!b.dataset.sure){b.dataset.sure=1;b.textContent="Tap again to delete";return} deleteSighting(x.id); map.closePopup()};d.appendChild(b)}
   return d;
@@ -2442,7 +2464,7 @@ function renderMates(){
     const old=Date.now()-Date.parse(l.at)>3*60e3;
     L.marker([+l.lat,+l.lon],{icon:L.divIcon({className:"lbl",html:`<div class="mate${old?" old":""}"><b></b><span>${esc(l.name)}</span></div>`,iconSize:[0,0]}),zIndexOffset:950})
       .bindPopup(()=>{const d=document.createElement("div");d.innerHTML=`<h4>${esc(l.name)}</h4><div class="pop-m">Updated ${ago(l.at)}${me?` · ${yd(dist(me,[+l.lat,+l.lon]))} yd ${card(bearing(me,[+l.lat,+l.lon]))} of you`:""}</div>`;
-        const g=document.createElement("button");g.className="btn";g.style.marginTop="8px";g.textContent="Guide me to "+l.name;g.onclick=()=>{map.closePopup();guideTo(l.name,[+l.lat,+l.lon])};d.appendChild(g);return d}).addTo(mateLayer);
+        const g=document.createElement("button");g.className="btn";g.style.marginTop="8px";g.textContent="Guide me to "+l.name;g.onclick=()=>{map.closePopup();guideTo(l.name,[+l.lat,+l.lon])};d.appendChild(g);mapsBtns(d,[+l.lat,+l.lon],l.name,"margin-top:8px;margin-left:6px");return d}).addTo(mateLayer);
     const r=document.createElement("div");r.className="prow";
     r.innerHTML=`<div class="picon" style="background:#2bb5a0">${esc(l.name.slice(0,2))}</div><div style="min-width:0"><div class="t">${esc(l.name)} is sharing</div><div class="m">Updated ${ago(l.at)}</div></div><div class="m">${me?yd(dist(me,[+l.lat,+l.lon]))+" yd":""}</div>`;
     r.onclick=()=>{map.setView([+l.lat,+l.lon],18);collapse(true)}; box.appendChild(r);
