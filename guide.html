@@ -176,7 +176,7 @@ footer{padding-block:28px 48px;color:var(--muted);font-size:14px}
   <h2>Reserve a stand</h2>
   <ol class="steps">
     <li><span>Open <b>Who's out</b>, find <b>Reservations</b>, and tap <span class="btn">Reserve a stand</span>.</span></li>
-    <li><span>Pick the day and the stand, then tap <span class="btn">Reserve</span>.</span></li>
+    <li><span>Pick the day, <b>Morning</b>, <b>Evening</b> or <b>All day</b>, and the stand, then tap <span class="btn">Reserve</span>.</span></li>
   </ol>
   <ul>
     <li>Reserve <b>from the property</b> (at camp or on the lease), for <b>today or the night before</b>.</li>
@@ -202,12 +202,12 @@ footer{padding-block:28px 48px;color:var(--muted);font-size:14px}
     <li><span>Tap again <b>where it went</b>. That draws the arrow. Tap <span class="btn">Next</span>.</span></li>
     <li><span>Add how many, buck or doe, points, when, and what it was doing. <span class="btn">Save sighting</span>.</span></li>
   </ol>
-  <p>Arrows show on the map under the <b>Sightings</b> layer. Over a season they show exactly how deer travel the lease.</p>
+  <p>Arrows show on the map under the <b>Sightings</b> layer. Over a season they show exactly how deer travel the lease. Use <b>This week</b>, <b>Season</b>, <b>All</b> and <b>Bucks only</b> (in Log, or under Sightings shown in Map) to pick which ones show.</p>
   <h3>Add a harvest</h3>
   <ol class="steps">
     <li><span>Tap <span class="btn">Add a harvest</span>. Pick the species and sex, points, weight, date, time and stand.</span></li>
     <li><span>Add a photo. Notes like "Shot at 5:20, ran 40 yd" help everyone.</span></li>
-    <li><span>Made a mistake? Open the harvest and edit it.</span></li>
+    <li><span>Made a mistake? Under <b>Harvests this season</b> in Log, tap <span class="btn">Edit</span> on it.</span></li>
   </ol>
   <div class="tip"><b>Counting points:</b> count every tip at least 1 inch long, brow tines included.</div>
   <h3>Trail cam photos</h3>
@@ -230,15 +230,17 @@ footer{padding-block:28px 48px;color:var(--muted);font-size:14px}
     <div><b>Trail cam</b>A camera, with its photos</div><div><b>Feeder</b>Needs Weyerhaeuser's written OK</div><div><b>Food plot</b>Size and what's planted</div>
     <div><b>Harvest</b>Where a deer fell</div><div><b>Blood</b>Sign on a blood trail</div><div><b>Note</b>Anything else</div>
   </div>
-  <p>Everyone sees every pin. You can delete your own pins; the club admin can delete any.</p>
+  <p>Tap any pin on the map for <span class="btn">Guide me</span> (walks you to it), <span class="btn">Open in Maps</span>, <span class="btn">Edit pin</span> and <span class="btn">Delete pin</span>. The <b>Pins</b> tab lists every pin, nearest first; tap a type to show or hide it.</p>
+  <p>Everyone sees every pin. You can delete your own pins; the club admin can delete any. Feeder and food plot pins are the exception: any member can delete those.</p>
 </section>
 
-<section id="map" data-k="map layers base aerial topo lidar elevation contours overlays boundary neighbor public land roads stands measure distance area open in maps directions">
+<section id="map" data-k="map guide me navigate directions walk to layers base aerial topo lidar elevation contours overlays boundary neighbor public land roads stands measure distance area open in maps directions">
   <h2>The map</h2>
   <h3>Base map</h3>
   <p><b>Aerial (newest · Sept 2025)</b> for timber and openings as they are now, <b>Aerial (sharper, older)</b> for more ground detail (older, so cuts and replanting may be out of date), <b>LiDAR terrain</b> for ridges, ditches and old roads, <b>Topo</b> for creeks and contour lines.</p>
   <h3>Overlays</h3>
-  <p>Switch layers on and off in <b>Map</b>: Boundary, Stands, Scent cones, Sightings, Deer trails, Roads, Walk-in routes, Tracks, Club pins, Harvests, Work list, Camp, Hunters, Neighbor lines, Public land (WMA), Elevation (high / low), 10 ft contours, Old stand pins.</p>
+  <p>Switch layers on and off in <b>Map</b>: Elevation (high / low), Slope (green / yellow / red), 10 ft contours, Boundary, Roads, Camp, Neighbor lines, Public land (WMA), Old stand pins, Club pins, Scent cones, Tracks, Walk-in routes, Deer trails, Sightings, Hunters, Members sharing location, Work list, Harvests.</p>
+  <p>Above them, <b>Stands</b> lists every club stand: turn them all on or off, or just one.</p>
   <div class="tip"><b>Neighbor lines are traced from onX</b> and can be off by about 30 m. Know the line before you shoot toward it.</div>
   <h3>Tools</h3>
   <ul>
@@ -246,7 +248,13 @@ footer{padding-block:28px 48px;color:var(--muted);font-size:14px}
     <li><span class="btn">Zoom to property</span>: brings the whole lease back on screen.</li>
     <li><span class="btn">Open this spot in Apple Maps</span> (Google Maps on Android): opens the map center in your phone's maps app for driving directions.</li>
     <li><span class="btn">Draw a deer trail</span> / <span class="btn">Draw a road</span>: tap along it in order, then save. The whole club sees them.</li>
+    <li><span class="btn">Log a deer sighting</span>: same as in Log (see <a href="#log">Log a sighting</a>).</li>
     <li>Tap a stand on the map for its winds, facing, why it's good and how to walk in.</li>
+  </ul>
+  <h3>Guide me</h3>
+  <ul>
+    <li>Tap a stand, pin, sighting or member's dot, then <span class="btn">Guide me</span>. A bar at the top shows the distance and an arrow pointing the way, and the map follows you. If the stand has a walk-in route, it follows the route.</li>
+    <li>Tap <span class="btn">Stop</span> in that bar when you're there. <span class="btn">Open in Maps</span> hands the spot to your phone's maps app for driving.</li>
   </ul>
 </section>
 
@@ -254,9 +262,9 @@ footer{padding-block:28px 48px;color:var(--muted);font-size:14px}
   <h2>Blood trail</h2>
   <ol class="steps">
     <li><span>In <b>Map</b>, tap <span class="btn">Start a blood trail</span> where the deer was standing when you shot. Your path draws in red.</span></li>
-    <li><span>Every time you find sign, tap <span class="btn">Blood</span>.</span></li>
+    <li><span>Every time you find sign, tap <span class="btn">Blood</span>. Each one also drops a Blood pin the club can see.</span></li>
     <li><span>Lost it? Tap <span class="btn">Last sign</span> to walk back to the last blood you marked, then circle out from there.</span></li>
-    <li><span>Found your deer? Tap <span class="btn">End</span>. The red line stays on the map until you start a new trail.</span></li>
+    <li><span>Found your deer? Tap <span class="btn">End</span>, then <span class="btn">Sure?</span> to confirm. The red line stays on the map until you start a new trail.</span></li>
   </ol>
   <div class="tip"><b>Keep the app open</b> while you track. Your phone stops GPS when the screen locks.</div>
 </section>
@@ -268,9 +276,9 @@ footer{padding-block:28px 48px;color:var(--muted);font-size:14px}
     <li><span>In <b>Map</b>, tap <span class="btn">Start a track</span>. A Recording bar shows at the top.</span></li>
     <li><span>Walk. Tap <span class="btn">Stop</span> when you get there.</span></li>
     <li><span>Name it and choose: <span class="btn">Save track</span> (just on your phone), <span class="btn">Save as deer trail</span> or <span class="btn">Save as road</span> (shared with the club).</span></li>
-    <li><span>To make it the quiet way in for a stand, open the track and tap <b>Set as walk-in route</b>. Everyone then sees it on that stand.</span></li>
+    <li><span><b>Admin only:</b> to make a track the quiet way in to a stand, find it under <b>Saved tracks</b>, tap <span class="btn">Walk-in route…</span>, pick the stand, then <span class="btn">Set as walk-in route</span>. Everyone then sees it on that stand, and Guide me follows it.</span></li>
   </ol>
-  <p>Your saved tracks are listed under <b>Saved tracks</b> in Map. Delete one, or <span class="btn">Clear all tracks</span>.</p>
+  <p>Your saved tracks are listed under <b>Saved tracks</b> in Map. They're hidden on the map until you tick one or tap <span class="btn">Show on map</span>. You can also turn one into a shared trail or road later (<span class="btn">Make deer trail…</span>, <span class="btn">Make road…</span>), <span class="btn">Delete</span> one, or <span class="btn">Clear all tracks</span>.</p>
 </section>
 
 <section id="offline" data-k="offline no signal one bar sync upload save map download wifi settings">
